@@ -1,0 +1,878 @@
+{
+  "schema": "source_bird_material_v1",
+  "maps": {
+    "wuming": [],
+    "youxian": [
+      {
+        "index": 0,
+        "actor": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird16",
+        "source_component": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird16.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YXD_P.umap",
+        "export_index": 220,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            0.891223132610321,
+            0.0,
+            0.0,
+            -4996.302734375
+          ],
+          [
+            0.0,
+            0.8006412982940674,
+            0.0,
+            5924.77294921875
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            461.8747863769531
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 1,
+        "actor": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird17",
+        "source_component": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird17.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YXD_P.umap",
+        "export_index": 221,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            0.80760258436203,
+            0.0,
+            0.0,
+            -5223.4130859375
+          ],
+          [
+            0.0,
+            0.6613094210624695,
+            0.0,
+            6030.54443359375
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            430.29815673828125
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 2,
+        "actor": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird18",
+        "source_component": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird18.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YXD_P.umap",
+        "export_index": 222,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -3562.552978515625
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            7550.65625
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            365.2762756347656
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 3,
+        "actor": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird19",
+        "source_component": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird19.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YXD_P.umap",
+        "export_index": 223,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -3440.33251953125
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            7480.71337890625
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            512.6828002929688
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 4,
+        "actor": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird20",
+        "source_component": "LV_YXD_P.PersistentLevel.BP_SceneNPC_Bird20.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YXD_P.umap",
+        "export_index": 224,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -3327.40625
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            7638.3046875
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            394.9786682128906
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 5,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird10",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird10.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 987,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5386.927734375
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6393.82177734375
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            487.25164794921875
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 6,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird11",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird11.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 988,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.1799999475479126,
+            0.0,
+            0.0,
+            -5269.65625
+          ],
+          [
+            0.0,
+            1.1799999475479126,
+            0.0,
+            6516.59619140625
+          ],
+          [
+            0.0,
+            0.0,
+            1.1799999475479126,
+            650.9271850585938
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 7,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird12",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird12.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 989,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5368.16748046875
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6475.064453125
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            547.7807006835938
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 8,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird13",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird13.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 990,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5168.12890625
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6210.59716796875
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            599.4769287109375
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 9,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird14",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird14.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 991,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5223.4130859375
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6295.03564453125
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            599.4769287109375
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 10,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird15",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird15.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 992,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -4938.59814453125
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6377.00537109375
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            690.0307006835938
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 11,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird2",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird2.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 993,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -7445.2958984375
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            3933.215576171875
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            458.9870300292969
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 12,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird3",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird3.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 994,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -7599.10400390625
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            3910.72705078125
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            389.0426940917969
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 13,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird4",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird4.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 995,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.1799999475479126,
+            0.0,
+            0.0,
+            -7420.34716796875
+          ],
+          [
+            0.0,
+            1.1799999475479126,
+            0.0,
+            3981.333740234375
+          ],
+          [
+            0.0,
+            0.0,
+            1.1799999475479126,
+            433.3595275878906
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 14,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird5",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird5.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 996,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -7528.98779296875
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            3916.324951171875
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            559.0379028320312
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 15,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird6",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird6.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 997,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -7472.9482421875
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            3727.50146484375
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            487.8574523925781
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 16,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird7",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird7.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 998,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -7452.87451171875
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            3811.940673828125
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            614.8225708007812
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_R.PFB_DW_N_I_R",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 17,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird8",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird8.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 999,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5324.650390625
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6564.83837890625
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            547.7807006835938
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 18,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird9",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird9.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 1000,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -5294.60498046875
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            6468.47802734375
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            635.087158203125
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      },
+      {
+        "index": 19,
+        "actor": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird_2",
+        "source_component": "LV_YouXianCun_S.PersistentLevel.BP_SceneNPC_Bird_2.Sprite0",
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap",
+        "export_index": 1001,
+        "template": "/Game/JH/AI/Animal/BP_SceneNPC_Bird.Default__BP_SceneNPC_Bird_C.Sprite0",
+        "source_actor_matrix_ue": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -7554.11181640625
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            4081.74365234375
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            373.08905029296875
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "source_flipbook": "/Game/JH/Characters/DongWu/Niao/PFB_DW_N_I_L.PFB_DW_N_I_L",
+        "material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1",
+        "material_name": "MI_JHMaskLitSprite1",
+        "lit": true,
+        "metallic": 0.699999988079071,
+        "roughness": 1,
+        "specular": 0.5,
+        "mask_dither": false,
+        "mask_y_offset": 1
+      }
+    ]
+  },
+  "source_evidence": {
+    "bird_blueprint": "F:\\孤屿霜尘\\Isle-Frostdust\\artifacts\\wandering-full-scene-study-20261123\\decoded\\Wandering_Sword\\Content\\JH\\AI\\Animal\\BP_SceneNPC_Bird.uasset.json",
+    "bird_sprite_template": "/Game/JH/Core/Characters/BP_SceneNPC.Default__BP_SceneNPC_C.Sprite0",
+    "bird_sprite_has_override": false,
+    "npc_blueprint": "F:\\孤屿霜尘\\Isle-Frostdust\\artifacts\\wandering-full-scene-study-20261123\\decoded\\Wandering_Sword\\Content\\JH\\Core\\Characters\\BP_SceneNPC.uasset.json",
+    "npc_override_materials": [
+      "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1"
+    ],
+    "actual_material": "/Game/JH/Core/Materilas/MI_JHMaskLitSprite1.MI_JHMaskLitSprite1"
+  }
+}

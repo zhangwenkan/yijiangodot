@@ -1,0 +1,85 @@
+{
+  "schema": "source_atmosphere_v1",
+  "map": "wuming",
+  "sun_power": 1.5,
+  "fog_power": 8.0,
+  "inverse_density": 100.00000223517424,
+  "density_offset": 0,
+  "ground_offset_cm": -100000,
+  "distance_scale": 3.0,
+  "altitude_scale": 1,
+  "rayleigh_height_km": 3.375,
+  "start_km": 0.07500000000000001,
+  "distance_offset_km": 0,
+  "sun_disk_scale": 1,
+  "sun_half_angle_cos": 0.9999890728403691,
+  "sun_source_angle_degrees": 0.5357000231742859,
+  "sun_luminance_linear": [
+    436952.36951138976,
+    436952.36951138976,
+    417714.8018107337
+  ],
+  "sun_rgb_linear": [
+    30.0,
+    30.0,
+    28.67919921875
+  ],
+  "sun_direction_ue": [
+    -0.6946803316219238,
+    -0.48642040484769206,
+    0.5299192642332049
+  ],
+  "sun_intensity": 30.0,
+  "inscatter_altitude_samples": 2,
+  "disable_sun_disk": false,
+  "disable_ground_scattering": false,
+  "precompute_counter": 2,
+  "textures": {
+    "transmittance": {
+      "path": "res://source_atmosphere_candidate/textures/transmittance.bgra8",
+      "dimensions": [
+        256,
+        64
+      ],
+      "format": "BGRA8",
+      "sha256": "de90cf1566e3a4f170ee238137ac5c62fc10a38bedd7f820572838051676bcf0",
+      "size": 65536
+    },
+    "irradiance": {
+      "path": "res://source_atmosphere_candidate/textures/irradiance.bgra8",
+      "dimensions": [
+        64,
+        16
+      ],
+      "format": "BGRA8",
+      "sha256": "1ab6117829d457931959b273de81d05ea0f5eae02916b89edc2b57d605f6964d",
+      "size": 4096
+    },
+    "inscatter": {
+      "path": "res://source_atmosphere_candidate/textures/inscatter.rgba16f",
+      "dimensions": [
+        256,
+        128,
+        2
+      ],
+      "format": "RGBA16F",
+      "sha256": "38aebcaeccc388dd7bff6b5a43fa5462a36ef0d94727b69446e78b300bf0e3f2",
+      "size": 524288
+    }
+  },
+  "provenance": {
+    "maps": "component-extra-audit.json, bulk-textures.json exact cooked raw export suffix check",
+    "defaults": "native ctor 0x142df7700 and SceneInfo 0x141b6df90",
+    "texture_upload": "native 0x142e066e0; format ids2/BGRA8 and10/FloatRGBA; flag8 ShaderResource, no sRGB",
+    "shader": "shipping GlobalShaderCache PS74-81; retained UE4.26 AtmosphereCommon only maps semantics",
+    "source_angle": "native-directional-source-angle.json: shipping ctor0x142eb89d0 instruction0x142eb8a98 stores float32 .5357000231742859 at +0x370; SoftAngle +0x374=0",
+    "order": "shipping native renderer0x141bec1a0:0x141befdf3 RenderAtmosphere before0x141befe6f RenderFog; retained UE source2257-2275 maps semantics",
+    "project_support": "cooked DefaultEngine.ini:45 r.SupportAtmosphericFog=True; native CVar ctor0x14067c020 default1"
+  },
+  "limits": [
+    "Opt-in cross-engine candidate; no GPU execution in child task",
+    "Original light shaft occlusion mask not reconstructed",
+    "Capture disables sun disk as native reflection captures do",
+    "Current sky textures/capture remain cross-engine adaptations"
+  ]
+}

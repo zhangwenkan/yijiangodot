@@ -1,0 +1,66 @@
+#version 450
+// Water_Material PS186027 pixel-normal-offset, UE DistortionCommon.ush.
+layout(location=0) in vec2 uv;
+layout(location=1) in vec3 view_position;
+layout(location=2) in vec3 flat_view_normal;
+layout(location=0) out vec4 encoded_offset;
+layout(set=0,binding=0,std140) uniform WaterFrame {
+    mat4 projection; mat4 inverse_projection; mat4 world_to_view; mat4 view_to_world;
+    vec4 render_output_size; mat4 model;
+    vec4 p0; vec4 p1; vec4 p2; vec4 p3; vec4 p4; vec4 p5;
+} f;
+layout(set=0,binding=1) uniform sampler2D waves2;
+layout(set=0,binding=2) uniform sampler2D waves1;
+layout(set=0,binding=3) uniform sampler2D water4;
+layout(set=0,binding=4) uniform sampler2D water3;
+layout(set=0,binding=5) uniform sampler2D water2;
+layout(set=0,binding=6) uniform sampler2D water1;
+layout(set=0,binding=7) uniform sampler2D opaque_depth;
+layout(set=0,binding=8,std140) uniform SceneClock { vec4 preceding[177]; vec4 time_taa; } clock_data;
+vec3 unpack_bc5(vec2 raw) { vec2 xy=raw*2.0-1.0; return vec3(xy,sqrt(max(1.0-dot(xy,xy),0.0))); }
+vec2 source_uv(float scale) { return (uv-vec2(0.5))/max(scale,0.000001)+vec2(0.5); }
+vec3 depth_view(vec2 screen_uv) {
+    vec4 v=f.inverse_projection*vec4(screen_uv*2.0-1.0,textureLod(opaque_depth,screen_uv,0.0).r,1.0);
+    return abs(v.w)<1e-12 ? vec3(0.0,0.0,-1e28) : v.xyz/v.w;
+}
+void main() {
+    vec2 screen_uv=gl_FragCoord.xy/f.render_output_size.xy;
+    if(gl_FragCoord.z<textureLod(opaque_depth,screen_uv,0.0).r)discard;
+    float t=clock_data.time_taa.x;
+    vec2 wuv=source_uv(f.p0.y*f.p0.x), ouv=source_uv(f.p1.x*f.p0.x);
+    vec3 w2=unpack_bc5(texture(waves2,wuv+t*f.p0.z*vec2(-0.5,0.8),f.p5.y).rg);
+    vec3 w1=unpack_bc5(texture(waves1,wuv+t*f.p0.z*vec2(0.4,-0.6),f.p5.y).rg);
+    vec3 n4=unpack_bc5(texture(water4,ouv+t*f.p1.y*vec2(-0.5,1.2),f.p5.y).rg);
+    vec3 n3=unpack_bc5(texture(water3,ouv+t*f.p1.y*vec2(0.9,-0.6),f.p5.y).rg);
+    vec3 n2=unpack_bc5(texture(water2,ouv+t*f.p1.y*vec2(-1.2,0.2),f.p5.y).rg);
+    vec3 n1=unpack_bc5(texture(water1,ouv+t*f.p1.y*vec2(0.8,0.2),f.p5.y).rg);
+    vec3 flat_normal=normalize(flat_view_normal);
+    float facing=1.0-max(dot(flat_normal,normalize(-view_position)),0.0);
+    float fresnel=0.04+0.96*pow(facing,5.0);
+    float normal_fade=pow(1.0-fresnel,2.0)*f.p2.x;
+    vec2 nxy=((w1.xy+w2.xy)*f.p0.w+(n1.xy+n2.xy+n3.xy+n4.xy)*f.p1.z)*f.p1.w*normal_fade;
+    vec3 tangent_normal=normalize(vec3(nxy,w1.z*w2.z*n1.z*n2.z*n3.z*n4.z));
+    vec3 dx=dFdx(view_position),dy=dFdy(view_position);
+    vec2 ux=dFdx(uv),uy=dFdy(uv);
+    float determinant=ux.x*uy.y-ux.y*uy.x;
+    if(abs(determinant)<1e-12)discard;
+    vec3 tangent=normalize((dx*uy.y-dy*ux.y)/determinant);
+    vec3 binormal=normalize((dy*ux.x-dx*uy.x)/determinant);
+    vec3 perturbed_normal=normalize(tangent*tangent_normal.x+binormal*tangent_normal.y+flat_normal*tangent_normal.z);
+    vec3 floor_view=depth_view(screen_uv);
+    float floor_cm=(f.view_to_world*vec4(floor_view,1.0)).y*100.0;
+    float depth01=clamp((1.0+f.p2.y-floor_cm)/max(f.p2.z,0.00001),0.0,1.0);
+    float raw_opacity=mix(f.p3.x,f.p3.y,depth01);
+    float shore_fade=clamp((-floor_view.z+view_position.z)*100.0/max(f.p2.w,0.00001),0.0,1.0);
+    float ior=mix(1.0,mix(f.p3.z,f.p3.w,raw_opacity),shore_fade);
+    // ViewRect covers the whole buffer. The source clips BEFORE FOV/pixel scaling.
+    vec2 offset=(flat_normal.xy-perturbed_normal.xy)*(ior-1.0);
+    if(dot(offset,offset)<0.00001)discard;
+    float inv_tan=abs(f.projection[0][0]);
+    vec2 output_size=f.render_output_size.zw;
+    offset*=vec2(inv_tan,inv_tan*output_size.x/output_size.y)*output_size*vec2(0.00023,-0.00023);
+    float gap=(-depth_view(screen_uv+offset).z+view_position.z)*100.0;
+    offset*=clamp(gap/max(1.0,min(abs(f.p4.x*0.5),50.0))-f.p4.x,0.0,1.0);
+    offset*=4.0;
+    encoded_offset=vec4(max(offset,vec2(0.0)),max(-offset,vec2(0.0)));
+}

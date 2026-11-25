@@ -1,0 +1,24 @@
+#version 450
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(set=0,binding=0) uniform sampler2D scene_snapshot;
+layout(set=0,binding=1) uniform sampler2D accumulation;
+layout(set=0,binding=2,rgba16f) uniform writeonly image2D scene_color;
+layout(push_constant,std430) uniform Push { ivec2 size; int audit_mode; int unused; } p;
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(pixel,p.size)))return;
+    vec4 a=texelFetch(accumulation,pixel,0);
+    if(p.audit_mode==1) {
+        imageStore(scene_color,pixel,vec4(a.rgb,a.a));
+        return;
+    }
+    // No stencil is needed when every untouched pixel is left unchanged.
+    if(all(equal(a,vec4(0.0)))) return;
+    vec2 uv=(vec2(pixel)+0.5)/vec2(p.size);
+    vec2 offset=(a.rg-a.ba)*0.25;
+    vec2 sample_uv=uv+offset;
+    vec2 lower=vec2(0.5)/vec2(p.size), upper=vec2(1.0)-lower;
+    // Native OOB rule is restore original UV, not clamp distorted UV to the border.
+    if(any(lessThan(sample_uv,lower)) || any(greaterThan(sample_uv,upper)))sample_uv=uv;
+    imageStore(scene_color,pixel,textureLod(scene_snapshot,sample_uv,0.0));
+}

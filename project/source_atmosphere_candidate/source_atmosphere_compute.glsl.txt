@@ -1,0 +1,487 @@
+#version 450
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(rgba16f,set=0,binding=0) uniform image2D scene_color;
+layout(set=0,binding=1) uniform sampler2D scene_depth;
+layout(set=0,binding=2) uniform sampler2D atmo_transmittance;
+layout(set=0,binding=3) uniform sampler2D atmo_irradiance;
+layout(set=0,binding=4) uniform sampler3D atmo_inscatter;
+layout(std430,set=0,binding=5) readonly buffer AtmosphereParameters {
+    mat4 inverse_projection;
+    mat4 camera;
+    vec4 atmo_settings0;
+    vec4 atmo_settings1;
+    vec4 atmo_settings2;
+    vec4 atmo_sun_color;
+    vec4 atmo_sun_dir;
+    vec4 atmo_disk;
+    vec4 hf_layer0;
+    vec4 hf_layer1;
+    vec4 hf_color_max;
+    vec4 hf_direction_exponent;
+    vec4 hf_direction_color_start;
+    vec4 hf_misc;
+} params;
+layout(std430,set=0,binding=6) buffer AtmosphereDiagnostic {
+    uvec4 config; // enabled, stride, sample width, sample height
+    vec4 records[];
+} diagnostic;
+
+const float PI=3.14159265358979323846;
+const vec3 BetaRayleighScattering=vec3(0.0058,0.0135,0.0331);
+const float HeightScaleMie=1.2;
+const vec3 BetaMieExtinction=vec3(0.004/0.9);
+const float MieG=0.8;
+const float RadiusGround=6360.0;
+const float RadiusAtmosphere=6430.0;
+const float HeightOffset=0.01;
+const int InscatterMuNum=128;
+const int InscatterMuSNum=32;
+const int InscatterNuNum=8;
+
+/*=============================================================================
+	AtmosphereCommon.usf: Functions and variables shared by both rendering and precomputation
+
+	This code contains embedded portions of free sample source code from 
+	http://www-evasion.imag.fr/Membres/Eric.Bruneton/PrecomputedAtmosphericScattering2.zip, Author: Eric Bruneton, 
+	08/16/2011, Copyright (c) 2008 INRIA, All Rights Reserved, which have been altered from their original version.
+
+	Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:
+
+    1. Redistributions of source code must retain the above copyright notice, 
+	   this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright notice, 
+	   this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holders nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+=============================================================================*/
+// Arithmetic semantic mapping from retained UE source, verified against local cooked global PS.
+vec2 source_atm_GetTransmittanceUV(float Radius, float Mu) 
+{
+    float U, V;
+	V = sqrt((Radius - RadiusGround) / (RadiusAtmosphere - RadiusGround));
+	U = atan((Mu + 0.15) / (1.0 + 0.15) * tan(1.5)) / 1.5;
+    return vec2(U, V);
+}
+
+vec2 source_atm_GetIrradianceUV(float Radius, float MuS) 
+{
+    float V = (Radius - RadiusGround) / (RadiusAtmosphere - RadiusGround);
+    float U = (MuS + 0.2) / (1.0 + 0.2);
+    return vec2(U, V);
+}
+
+vec4 source_atm_Texture4DSample(float Radius, float Mu, float MuS, float Nu)
+{
+    float H = sqrt(RadiusAtmosphere * RadiusAtmosphere - RadiusGround * RadiusGround);
+    float Rho = sqrt(Radius * Radius - RadiusGround * RadiusGround);
+    float RMu = Radius * Mu;
+    float Delta = RMu * RMu - Radius * Radius + RadiusGround * RadiusGround;
+    vec4 TexOffset = RMu < 0.0 && Delta > 0.0 ? vec4(1.0, 0.0, 0.0, 0.5 - 0.5 / float(InscatterMuNum)) : vec4(-1.0, H * H, H, 0.5 + 0.5 / float(InscatterMuNum));
+	float MuR = 0.5 / float(params.atmo_sun_dir.w) + Rho / H * (1.0 - 1.0 / float(params.atmo_sun_dir.w));
+    float MuMu = TexOffset.w + (RMu * TexOffset.x + sqrt(Delta + TexOffset.y)) / (Rho + TexOffset.z) * (0.5 - 1.0 / float(InscatterMuNum));
+    
+    
+    
+    float MuMuS = 0.5 / float(InscatterMuSNum) + (atan(max(MuS, -0.1975) * tan(1.26 * 1.1)) / 1.1 + (1.0 - 0.26)) * 0.5 * (1.0 - 1.0 / float(InscatterMuSNum));
+    float LerpValue = (Nu + 1.0) * 0.5 * (float(InscatterNuNum) - 1.0);
+    float MuNu = floor(LerpValue);
+    LerpValue = LerpValue - MuNu;
+
+    return textureLod(atmo_inscatter, vec3((MuNu + MuMuS) / float(InscatterNuNum), MuMu, MuR), 0.0) * (1.0 - LerpValue) +
+           textureLod(atmo_inscatter, vec3((MuNu + MuMuS + 1.0) / float(InscatterNuNum), MuMu, MuR), 0.0) * LerpValue;
+}
+
+vec3 source_atm_Transmittance(float Radius, float Mu) 
+{
+	vec2 UV = source_atm_GetTransmittanceUV(Radius, Mu);
+	return textureLod(atmo_transmittance, UV, 0.0).rgb;
+}
+
+vec3 source_atm_TransmittanceWithShadow(float Radius, float Mu) 
+{
+	
+    
+	return source_atm_Transmittance(Radius, Mu);
+}
+
+float source_atm_OpticalDepthWithDistance(float H, float Radius, float Mu, float D) 
+{
+	float ParticleDensity = 6.2831; 
+    float A = sqrt((0.5/H)*Radius);
+    vec2 A01 = A * vec2(Mu, Mu + D / Radius);
+    vec2 A01Sign = sign(A01);
+    vec2 A01Squared = A01*A01;
+    float X = A01Sign.y > A01Sign.x ? exp(A01Squared.x) : 0.0;
+    vec2 Y = A01Sign / (2.3193*abs(A01) + sqrt(1.52*A01Squared + 4.0)) * vec2(1.0, exp(-D/H*(D/(2.0*Radius)+Mu)));
+    return sqrt((ParticleDensity*H)*Radius) * exp((RadiusGround-Radius)/H) * (X + dot(Y, vec2(1.0, -1.0)));
+}
+
+vec3 source_atm_Irradiance(float r, float muS) 
+{
+    vec2 UV = source_atm_GetIrradianceUV(r, muS);
+	return textureLod(atmo_irradiance, UV, 0.0).rgb;
+}
+
+float source_atm_PhaseFunctionR(float Mu) 
+{
+    return (3.0 / (16.0 * PI)) * (1.0 + Mu * Mu);
+}
+
+float source_atm_PhaseFunctionM(float Mu) 
+{
+	return 1.5 * 1.0 / (4.0 * PI) * (1.0 - MieG * MieG) * pow( abs(1.0 + (MieG * MieG) - 2.0 * MieG * Mu), -3.0/2.0) * (1.0 + Mu * Mu) / (2.0 + MieG * MieG);
+}
+
+vec3 source_atm_GetMie(vec4 RayMie) 
+{ 
+	
+	return RayMie.rgb * RayMie.w / max(RayMie.r, 1e-4) * (BetaRayleighScattering.rrr / BetaRayleighScattering.rgb);
+}
+
+vec3 source_atm_AnalyticTransmittance(float R, float Mu, float D) 
+{
+    return exp(- BetaRayleighScattering * source_atm_OpticalDepthWithDistance(params.atmo_settings1.w, R, Mu, D) - BetaMieExtinction * source_atm_OpticalDepthWithDistance(HeightScaleMie, R, Mu, D));
+}
+
+vec3 source_atm_GetInscatterColor(float FogDepth, vec3 X, float T, vec3 V, vec3 S, float Radius, float Mu, out vec3 Attenuation, bool bIsSceneGeometry) 
+{
+    vec3 Result = vec3(0., 0., 0.); 	
+	Attenuation = vec3(1., 1., 1.);
+
+	float D = -Radius * Mu - sqrt(Radius * Radius * (Mu * Mu - 1.0) + RadiusAtmosphere * RadiusAtmosphere);
+    if (D > 0.0) 
+	{ 
+		
+        
+        X += D * V;
+        T -= D;
+        Mu = (Radius * Mu + D) / RadiusAtmosphere;
+        Radius = RadiusAtmosphere;
+    }
+
+	float Epsilon = 0.005;
+
+	if (Radius < RadiusGround + HeightOffset + Epsilon)
+	{
+		float Diff = (RadiusGround + HeightOffset + Epsilon) - Radius;
+		X -= Diff * V;
+		T -= Diff;
+		Radius = RadiusGround + HeightOffset + Epsilon;
+		Mu = dot(X, V) / Radius;
+	}
+
+	if (Radius <= RadiusAtmosphere && FogDepth > 0.) 
+	{ 
+		vec3 X0 = X + T * V;
+		float R0 = length(X0);
+		
+		float Nu = dot(V, S);
+		float MuS = dot(X, S) / Radius;
+
+		float MuHorizon = -sqrt(1.0 - (RadiusGround / Radius) * (RadiusGround / Radius));
+
+		if (bIsSceneGeometry)
+		{
+			Mu = max(Mu, MuHorizon + Epsilon + 0.15);
+		}
+		else
+		{ 
+			Mu = max(Mu, MuHorizon + Epsilon);
+		}
+
+		float MuOriginal = Mu;
+
+		float BlendRatio = 0.0;
+
+		if (bIsSceneGeometry)
+		{
+			BlendRatio = clamp(exp(-V.z) - 0.5,0.0,1.0);
+			if (BlendRatio < 1.)
+			{
+				V.z = max(V.z, 0.15);
+				V = normalize(V);
+				vec3 X1 = X + T * V;
+				float R1 = length(X1);
+				Mu = dot(X1, V) / R1; 
+			}
+		}
+
+		float PhaseR = source_atm_PhaseFunctionR(Nu);
+		float PhaseM = source_atm_PhaseFunctionM(Nu);
+		vec4 Inscatter = max(source_atm_Texture4DSample(Radius, Mu, MuS, Nu), 0.0);
+
+		if (T > 0.0) 
+		{
+			
+			Attenuation = source_atm_AnalyticTransmittance(Radius, Mu, T);
+
+			float Mu0 = dot(X0, V) / R0;
+			float MuS0 = dot(X0, S) / R0;
+
+			if (bIsSceneGeometry)
+			{
+				R0 = max(R0, Radius);
+			}
+
+			if (R0 > RadiusGround + HeightOffset)
+			{
+				if (BlendRatio < 1.)
+				{
+					Inscatter = max(Inscatter - Attenuation.rgbr * source_atm_Texture4DSample(R0, Mu0, MuS0, Nu), 0.0);
+					
+					if (!bIsSceneGeometry ) 
+					{
+						if (abs(Mu - MuHorizon) < Epsilon)
+						{
+							float Alpha = ((Mu - MuHorizon) + Epsilon) * 0.5 / Epsilon;
+
+							Mu = MuHorizon - Epsilon;
+							R0 = sqrt(Radius * Radius + T * T + 2.0 * Radius * T * Mu);
+							Mu0 = (Radius * Mu + T) / R0;
+
+							Mu0 = max(MuHorizon + Epsilon, Mu0);
+							vec4 Inscatter0 = source_atm_Texture4DSample(Radius, Mu, MuS, Nu);
+							vec4 Inscatter1 = source_atm_Texture4DSample(R0, Mu0, MuS0, Nu);
+							vec4 InscatterA = max(Inscatter0 - Attenuation.rgbr * Inscatter1, 0.0);
+
+							Mu = MuHorizon + Epsilon;
+							R0 = sqrt(Radius * Radius + T * T + 2.0 * Radius * T * Mu);
+
+							Mu0 = (Radius * Mu + T) / R0;
+							Mu0 = max(MuHorizon + Epsilon, Mu0);
+							Inscatter0 = source_atm_Texture4DSample(Radius, Mu, MuS, Nu);
+							Inscatter1 = source_atm_Texture4DSample(R0, Mu0, MuS0, Nu);
+							vec4 InscatterB = max(Inscatter0 - Attenuation.rgbr * Inscatter1, 0.0);
+
+							Inscatter = mix(InscatterA, InscatterB, Alpha);
+						}
+					}
+					else if (BlendRatio > 0.)
+					{
+						Inscatter = mix(Inscatter,
+							(1. - Attenuation.rgbr) * max(source_atm_Texture4DSample(Radius, MuOriginal, MuS, Nu), 0.0), 
+							BlendRatio);
+					}
+				}
+				else
+				{
+					Inscatter = (1. - Attenuation.rgbr) * Inscatter; 
+				}
+			}
+		}
+        
+        Inscatter.w *= smoothstep(0.00, 0.02, MuS);
+        Result = max(Inscatter.rgb * PhaseR + source_atm_GetMie(Inscatter) * PhaseM, 0.0);
+    } 
+
+	return Result;
+}
+
+vec3 source_atm_GetGroundColor(vec4 SceneColor, vec3 X, float T, vec3 V, vec3 S, float Radius, vec3 Attenuation, bool bIsSceneGeometry)
+{
+    vec3 Result = vec3(0., 0., 0.); 	
+    if (T > 0.0) 
+	{ 
+		
+        
+        vec3 X0 = X + T * V;
+        float R0 = length(X0);
+        vec3 N = X0 / R0;
+		N = X0 / R0;
+		SceneColor.xyz = clamp(SceneColor.xyz + 0.05,0.0,1.0);
+
+        vec4 Reflectance = SceneColor * vec4(0.2, 0.2, 0.2, 1.0);
+
+        
+        float MuS = dot(N, S);
+        vec3 SunLight = bIsSceneGeometry ? vec3(0., 0., 0.) : source_atm_TransmittanceWithShadow(R0, MuS);
+
+        
+        vec3 GroundSkyLight = source_atm_Irradiance(R0, MuS);
+
+        
+        
+		vec3 GroundColor = (Reflectance.rgb * (max(MuS, 0.0) * SunLight + GroundSkyLight)) / PI;
+
+        
+        if (!bIsSceneGeometry && Reflectance.w > 0.0) 
+		{
+            vec3 H = normalize(S - V);
+            float Fresnel = 0.02 + 0.98 * pow(1.0 - dot(-V, H), 5.0);
+            float WaterBrdf = Fresnel * pow(max(dot(H, N), 0.0), 150.0);
+            GroundColor += Reflectance.w * max(WaterBrdf, 0.0) * SunLight;
+        }
+
+		Result = Attenuation * GroundColor; 
+    } 
+    return Result;
+}
+
+vec3 source_atm_GetSunColor(vec3 X, float T, vec3 V, vec3 S, float Radius, float Mu) 
+{
+	vec3 TransmittanceValue = Radius <= RadiusAtmosphere ? source_atm_TransmittanceWithShadow(Radius, Mu) : vec3(1.0, 1.0, 1.0); 
+    if (T > 0.0) 
+	{
+        return vec3(0., 0., 0.);
+    }
+	else 
+	{
+		float SunDiskMask = step(params.atmo_settings2.z, dot(V, S));
+        return TransmittanceValue * SunDiskMask * (params.atmo_disk.rgb*params.atmo_sun_color.w); 
+    }
+}
+
+vec4 source_atm_evaluate(vec3 camera_cm, vec3 world_ray, float scene_depth_cm) {
+    float scale = 0.00001 * params.atmo_settings1.y;
+    vec3 x = camera_cm;
+    x.z = (x.z - params.atmo_settings1.x) * params.atmo_settings1.z;
+    x *= scale;
+    x.z += RadiusGround + HeightOffset;
+    float radius = length(x);
+    vec3 v = normalize(world_ray);
+    float mu = dot(x,v)/radius;
+    // Native sqrt of a negative discriminant makes T non-positive for sky rays.
+    // Use explicit -1 sentinel to preserve branch semantics without undefined NaN propagation.
+    float ground_discriminant = radius*radius*(mu*mu-1.0)+RadiusGround*RadiusGround;
+    float t = ground_discriminant>=0.0 ? -radius*mu-sqrt(ground_discriminant) : -1.0;
+    float depth = scene_depth_cm*scale;
+    float fog_depth = max(0.0,depth-params.atmo_settings2.x);
+    float ratio = min(fog_depth*0.1/params.atmo_settings2.x,1.0);
+    bool geometry = depth<100.0*params.atmo_settings1.y;
+    float shadow = 1.0;
+    if (geometry) {
+        shadow=ratio*params.atmo_settings0.y;
+        t=max(depth+params.atmo_settings2.y,1.0);
+    }
+    vec3 attenuation;
+    vec3 sun_dir=normalize(params.atmo_sun_dir.xyz);
+    vec3 scattering=source_atm_GetInscatterColor(fog_depth,x,t,v,sun_dir,radius,mu,attenuation,geometry);
+    vec3 ground=vec3(0.0);
+    if (params.atmo_disk.w<0.5) {
+        ground=source_atm_GetGroundColor(vec4(0.0,0.0,0.0,1.0),x,t,v,sun_dir,radius,attenuation,geometry);
+    }
+    vec3 sun=vec3(0.0);
+    if (params.atmo_settings2.w<0.5) {
+        sun=source_atm_GetSunColor(x,t,v,sun_dir,radius,mu);
+    }
+    vec3 rgb=(scattering+ground+sun)*params.atmo_settings0.x*shadow*params.atmo_sun_color.rgb*params.atmo_sun_color.w;
+    float transmission=mix(clamp(attenuation.r*params.atmo_settings0.z-params.atmo_settings0.w,0.0,1.0),1.0,1.0-ratio);
+    return vec4(rgb,transmission);
+}
+
+// UE4.26 HeightFogCommon analytic model with shipping-game component constants.
+// Input positions are Godot metres; internal distances stay Unreal centimetres.
+// Return vec4(premultiplied inscattering, source_hf_tmp_transmission), NOT Godot FOG convention.
+float source_hf_line_integral(float source_hf_tmp_falloff, float source_hf_tmp_dz, float source_hf_tmp_origin_density) {
+    float source_hf_tmp_f = max(-127.0, source_hf_tmp_falloff * source_hf_tmp_dz);
+    // Avoid evaluating the undefined 0/0 branch; source selects the same Taylor limit.
+    float source_hf_tmp_integral = 0.6931471805599453 - 0.2402265069591007 * source_hf_tmp_f;
+    if (abs(source_hf_tmp_f) > 0.01) { source_hf_tmp_integral = (1.0-exp2(-source_hf_tmp_f))/source_hf_tmp_f; }
+    return source_hf_tmp_origin_density * source_hf_tmp_integral;
+}
+
+float source_hf_origin_density(vec3 source_hf_tmp_layer, float source_hf_tmp_height, bool source_hf_tmp_excluded) {
+    float source_hf_tmp_exponent = -source_hf_tmp_layer.y * (source_hf_tmp_height-source_hf_tmp_layer.z);
+    source_hf_tmp_exponent = source_hf_tmp_excluded ? min(127.0, source_hf_tmp_exponent) : clamp(source_hf_tmp_exponent,-125.0,126.0);
+    return source_hf_tmp_layer.x * exp2(source_hf_tmp_exponent);
+}
+
+vec3 source_hf_directional(vec3 source_hf_tmp_ray_direction, float source_hf_tmp_optical_depth) {
+    if (!(params.hf_misc.w>0.5)) { return vec3(0.0); }
+    float source_hf_tmp_lobe = pow(clamp(dot(source_hf_tmp_ray_direction,params.hf_direction_exponent.xyz),0.0,1.0),
+        clamp(params.hf_direction_exponent.w,0.000001,1000.0));
+    return params.hf_direction_color_start.xyz * params.atmo_sun_color.w * source_hf_tmp_lobe
+        * (1.0-clamp(exp2(-source_hf_tmp_optical_depth),0.0,1.0));
+}
+
+vec4 source_height_fog(vec3 source_hf_tmp_camera_world_m, vec3 source_hf_tmp_receiver_world_m) {
+    float source_hf_tmp_observer_height = min(source_hf_tmp_camera_world_m.y*100.0,params.hf_misc.z);
+    vec3 source_hf_tmp_ray_cm = (source_hf_tmp_receiver_world_m-source_hf_tmp_camera_world_m)*100.0;
+    source_hf_tmp_ray_cm.y += source_hf_tmp_camera_world_m.y*100.0-source_hf_tmp_observer_height;
+    float source_hf_tmp_original_length = length(source_hf_tmp_ray_cm);
+    if (source_hf_tmp_original_length <= max(params.hf_misc.x,0.000001)
+        || (params.hf_misc.y > 0.0 && source_hf_tmp_original_length > params.hf_misc.y)) {
+        return vec4(0.0,0.0,0.0,1.0);
+    }
+    vec3 source_hf_tmp_direction = source_hf_tmp_ray_cm / source_hf_tmp_original_length;
+    float source_hf_tmp_ray_length = source_hf_tmp_original_length;
+    float source_hf_tmp_dz = source_hf_tmp_ray_cm.y;
+    bool source_hf_tmp_excluded = params.hf_misc.x > 0.0;
+    if (source_hf_tmp_excluded) {
+        float source_hf_tmp_exclusion_t = params.hf_misc.x/source_hf_tmp_original_length;
+        source_hf_tmp_observer_height += source_hf_tmp_exclusion_t*source_hf_tmp_ray_cm.y;
+        source_hf_tmp_ray_length = (1.0-source_hf_tmp_exclusion_t)*source_hf_tmp_original_length;
+        source_hf_tmp_dz = (1.0-source_hf_tmp_exclusion_t)*source_hf_tmp_ray_cm.y;
+    }
+    float source_hf_tmp_shared = source_hf_line_integral(params.hf_layer0.xyz.y,source_hf_tmp_dz,
+        source_hf_origin_density(params.hf_layer0.xyz,source_hf_tmp_observer_height,source_hf_tmp_excluded));
+    source_hf_tmp_shared += source_hf_line_integral(params.hf_layer1.xyz.y,source_hf_tmp_dz,
+        source_hf_origin_density(params.hf_layer1.xyz,source_hf_tmp_observer_height,source_hf_tmp_excluded));
+    float source_hf_tmp_transmission = max(clamp(exp2(-source_hf_tmp_shared*source_hf_tmp_ray_length),0.0,1.0),1.0-params.hf_color_max.w);
+    float source_hf_tmp_directional_depth = source_hf_tmp_shared*max(source_hf_tmp_ray_length-max(params.hf_direction_color_start.w,0.0),0.0);
+    vec3 source_hf_tmp_rgb = params.hf_color_max.xyz*(1.0-source_hf_tmp_transmission)+source_hf_directional(source_hf_tmp_direction,source_hf_tmp_directional_depth);
+    return vec4(source_hf_tmp_rgb,source_hf_tmp_transmission);
+}
+
+float source_hf_sky_depth(vec3 source_hf_tmp_layer, float source_hf_tmp_height, float source_hf_tmp_direction_y) {
+    if (source_hf_tmp_layer.x <= 0.0) { return 0.0; }
+    // Analytic infinite ray, avoiding arbitrary scene-far clipping or density*infinity NaNs.
+    if (source_hf_tmp_layer.y*source_hf_tmp_direction_y <= 0.0) { return 1.0e30; }
+    return source_hf_origin_density(source_hf_tmp_layer,source_hf_tmp_height,params.hf_misc.x>0.0)/(source_hf_tmp_layer.y*source_hf_tmp_direction_y);
+}
+
+vec4 source_height_fog_sky(vec3 source_hf_tmp_camera_world_m, vec3 source_hf_tmp_sky_direction) {
+    if (params.hf_misc.y > 0.0) { return vec4(0.0,0.0,0.0,1.0); }
+    vec3 source_hf_tmp_direction = normalize(source_hf_tmp_sky_direction);
+    float source_hf_tmp_h = min(source_hf_tmp_camera_world_m.y*100.0,params.hf_misc.z)
+        + max(params.hf_misc.x,0.0)*source_hf_tmp_direction.y;
+    float source_hf_tmp_optical_depth = source_hf_sky_depth(params.hf_layer0.xyz,source_hf_tmp_h,source_hf_tmp_direction.y)
+        + source_hf_sky_depth(params.hf_layer1.xyz,source_hf_tmp_h,source_hf_tmp_direction.y);
+    float source_hf_tmp_transmission = max(clamp(exp2(-source_hf_tmp_optical_depth),0.0,1.0),1.0-params.hf_color_max.w);
+    return vec4(params.hf_color_max.xyz*(1.0-source_hf_tmp_transmission)+source_hf_directional(source_hf_tmp_direction,source_hf_tmp_optical_depth),source_hf_tmp_transmission);
+}
+
+vec4 source_height_fog_to_godot(vec4 source_hf_tmp_source_fog, bool source_hf_tmp_attenuate_only) {
+    float source_hf_tmp_opacity = clamp(1.0-source_hf_tmp_source_fog.a,0.0,1.0);
+    // Godot multiplies FOG.rgb by FOG.a internally. Preserve directional HDR separately
+    // from the source_hf_tmp_opacity cap by dividing the entire source premultiplied RGB by source_hf_tmp_opacity.
+    return vec4((source_hf_tmp_attenuate_only || source_hf_tmp_opacity<=0.0) ? vec3(0.0) : source_hf_tmp_source_fog.rgb/source_hf_tmp_opacity,source_hf_tmp_opacity);
+}
+
+
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size=imageSize(scene_color);
+    if(any(greaterThanEqual(pixel,size))) return;
+    vec2 uv=(vec2(pixel)+0.5)/vec2(size);
+    float depth=texelFetch(scene_depth,pixel,0).r;
+    bool sky=depth<=0.0;
+    vec4 view_h=params.inverse_projection*vec4(uv*2.0-1.0,sky?0.000001:depth,1.0);
+    vec3 view_position=view_h.xyz/view_h.w;
+    vec3 world_camera=params.camera[3].xyz;
+    vec3 world_delta=mat3(params.camera)*view_position;
+    vec3 ray=normalize(world_delta);
+    float source_axial_depth_cm=sky?1.0e10:max(-view_position.z*100.0,0.0);
+    vec4 atmosphere=source_atm_evaluate(world_camera.xzy*100.0,ray.xzy,source_axial_depth_cm);
+    vec4 height=sky?source_height_fog_sky(world_camera,ray):source_height_fog(world_camera,world_camera+world_delta);
+    vec4 color=imageLoad(scene_color,pixel);
+    // Original order: C1=Atmosphere.rgb+Atmosphere.a*C0, C2=Height.rgb+Height.a*C1.
+    // Godot input already includes Height. This algebra avoids dividing by transmittance.
+    vec3 result=atmosphere.a*color.rgb + height.a*atmosphere.rgb +(1.0-atmosphere.a)*height.rgb;
+    bool valid=!(any(isnan(result)) || any(isinf(result)));
+    vec4 output_color=vec4(valid?result:color.rgb,color.a);
+    if(valid) imageStore(scene_color,pixel,output_color);
+    if(diagnostic.config.x!=0u && pixel.x%int(diagnostic.config.y)==0 && pixel.y%int(diagnostic.config.y)==0) {
+        ivec2 sample_pixel=pixel/int(diagnostic.config.y);
+        uint index=uint(sample_pixel.y*int(diagnostic.config.z)+sample_pixel.x)*6u;
+        diagnostic.records[index+0u]=color;
+        diagnostic.records[index+1u]=output_color;
+        diagnostic.records[index+2u]=vec4(world_camera+world_delta,depth);
+        diagnostic.records[index+3u]=atmosphere;
+        diagnostic.records[index+4u]=height;
+        diagnostic.records[index+5u]=vec4(view_position,valid?1.0:0.0);
+    }
+}

@@ -1,0 +1,99 @@
+#version 450
+#ifndef OPERATION
+#define OPERATION 0
+#endif
+// Circle gather/recombine adapted from Godot 4.7.2 (MIT, see GODOT_LICENSE.txt).
+// All samples remain scene-linear HDR. This is not UE DiaphragmDOF.
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+#if OPERATION == 0 || OPERATION == 2
+layout(rgba16f,set=0,binding=0) uniform image2D scene_color;
+layout(set=0,binding=1) uniform sampler2D source_depth;
+#endif
+#if OPERATION == 1 || OPERATION == 2
+layout(set=0,binding=2) uniform sampler2D source_coc;
+#endif
+#if OPERATION == 2
+layout(set=0,binding=3) uniform sampler2D source_bokeh;
+#endif
+#if OPERATION == 0
+layout(rgba16f,set=0,binding=4) uniform writeonly image2D coc_target;
+#endif
+#if OPERATION == 1
+layout(rgba16f,set=0,binding=5) uniform writeonly image2D bokeh_target;
+#endif
+layout(std430,set=0,binding=6) readonly buffer Parameters {
+    mat4 inverse_projection;
+    vec4 optics; // focus m, infinity CoC px, near cap px, far cap px
+    vec4 kernel; // maximum gather radius px, radial increment, reserved, reserved
+    ivec4 diagnostic; // enabled, stride, sample width, sample height
+} params;
+#if OPERATION == 2
+layout(std430,set=0,binding=7) buffer Diagnostic { vec4 records[]; } diagnostic_data;
+#endif
+layout(push_constant,std430) uniform Push {
+    ivec2 output_size;
+    int operation;
+    int reserved;
+} push_data;
+const float GOLDEN_ANGLE=2.39996323;
+
+#if OPERATION == 0 || OPERATION == 2
+float linear_depth(vec2 uv) {
+    float raw=textureLod(source_depth,uv,0.0).r;
+    vec4 p=params.inverse_projection*vec4(uv*2.0-1.0,raw,1.0);
+    // Reversed-Z sky has w=0 under an infinite projection: use infinity.
+    return abs(p.w)>1e-12 ? max(-p.z/p.w,1e-6) : 1e20;
+}
+#endif
+float source_radius(float depth) {
+    return clamp(params.optics.y*(depth-params.optics.x)/depth,-params.optics.z,params.optics.w);
+}
+void main() {
+    ivec2 pos=ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(pos,push_data.output_size)))return;
+    vec2 pixel=1.0/vec2(push_data.output_size);
+#if OPERATION == 0
+        vec2 uv=(vec2(pos)+.5)*pixel;
+        vec4 color=imageLoad(scene_color,pos);
+        color.a=source_radius(linear_depth(uv));
+        imageStore(coc_target,pos,color);
+#elif OPERATION == 1
+        // Match Godot's circle half-size sample centers and full-size pixel steps.
+        pixel*=.5;
+        vec2 uv=vec2(pos)/vec2(push_data.output_size)+pixel*.5;
+        vec4 color=textureLod(source_coc,uv,0.0);
+        float initial_blur=color.a;
+        float accum=1.0;
+        float radius=params.kernel.y;
+        for(float angle=0.0;radius<params.kernel.x;angle+=GOLDEN_ANGLE) {
+            vec2 suv=uv+vec2(cos(angle),sin(angle))*pixel*radius;
+            vec4 sample_color=textureLod(source_coc,suv,0.0);
+            float sample_size=abs(sample_color.a);
+            if(sample_color.a>initial_blur)
+                sample_size=clamp(sample_size,0.0,abs(initial_blur)*2.0);
+            float amount=smoothstep(radius-.5,radius+.5,sample_size);
+            color+=mix(color/accum,sample_color,amount);
+            accum+=1.0;
+            radius+=params.kernel.y/radius;
+        }
+        imageStore(bokeh_target,pos,color/accum);
+#else
+        vec2 uv=(vec2(pos)+.5)*pixel;
+        vec4 original=imageLoad(scene_color,pos);
+        vec4 center=texelFetch(source_coc,pos,0);
+        vec4 bokeh=textureLod(source_bokeh,uv,0.0);
+        float amount=bokeh.a<center.a
+            ? clamp(max(abs(center.a),abs(bokeh.a)),0.0,1.0)
+            : clamp(abs(center.a),0.0,1.0);
+        vec4 result=vec4(mix(original.rgb,bokeh.rgb,amount),original.a);
+        imageStore(scene_color,pos,result);
+        if(params.diagnostic.x!=0 && pos.x%params.diagnostic.y==0 && pos.y%params.diagnostic.y==0) {
+            ivec2 q=pos/params.diagnostic.y;
+            int i=(q.y*params.diagnostic.z+q.x)*3;
+            diagnostic_data.records[i]=original;
+            diagnostic_data.records[i+1]=result;
+            diagnostic_data.records[i+2]=vec4(linear_depth(uv),center.a,bokeh.a,amount);
+        }
+#endif
+}
+

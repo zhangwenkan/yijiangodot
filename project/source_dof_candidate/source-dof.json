@@ -1,0 +1,78 @@
+{
+  "schema": "source_dof_v1",
+  "status": "Native settings and physical CoC mapped; Godot gather/recombine adaptation",
+  "maps": [
+    "wuming",
+    "youxian"
+  ],
+  "sensor_width_mm": 24.576000213623047,
+  "min_fstop": 1.2000000476837158,
+  "blade_count": 5,
+  "depth_blur_radius": 0.0,
+  "depth_blur_amount_km": 1.0,
+  "horizontal_fov_deg_reference": 40.0,
+  "exterior": {
+    "focus_cm": 3220.0,
+    "fstop": 0.07999999821186066
+  },
+  "interior": {
+    "focus_cm": 1470.0,
+    "fstop": 0.4000000059604645
+  },
+  "max_foreground_radius_fraction": 0.02500000037252903,
+  "max_background_radius_fraction": 0.02500000037252903,
+  "bokeh_shape": "Circle",
+  "focus_behavior": "Fixed source volume focus within each house state. No player-distance tracking in adapter.",
+  "source_bindings": {
+    "wuming": {
+      "index": 2509,
+      "object": "LV_WuMinDao_S.PersistentLevel.JHPostProcessVolume_0",
+      "asset": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap"
+    },
+    "youxian": {
+      "index": 1002,
+      "object": "LV_YouXianCun_S.PersistentLevel.JHPostProcessVolume_0",
+      "asset": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/YouXianDao/LV_YouXianCun_S.umap"
+    }
+  },
+  "evidence": {
+    "native_defaults": "native-dof-defaults-and-camera.json",
+    "native_coc_compile": "native-0x141e0b6e0.txt: 0x141e0b94b..0x141e0ba16",
+    "native_bokeh_compile": "native-0x141e0fe70.txt",
+    "native_radius_cvar_defaults": [
+      "native-0x1406d1a80.txt",
+      "native-0x1406d1b30.txt"
+    ],
+    "source_volume_and_house_bytecode": "../indoor-postprocess-audit.json",
+    "source_camera_blueprints": "camera-source-audit.json",
+    "shader_semantics": "ue426-DOFCommon.ush DepthToHalfResCocRadius; compiled original setup shader not yet independently matched",
+    "saved_source_quality": "sg.PostProcessQuality=3, ResolutionQuality=100, 1920x1080 in current Saved/Config; runtime CVar not captured"
+  },
+  "adaptation": {
+    "focal_mm": "sensor_width_mm * 0.5 * camera_projection_m00",
+    "infinity_radius_px": "width*focal_mm^2/(2*sensor_width_mm*fstop*(focus_cm*10-focal_mm))",
+    "signed_coc_px": "infinity_radius_px*(depth_m-focus_m)/depth_m",
+    "godot_practical": {
+      "near_distance": "focus_m",
+      "far_distance": "focus_m",
+      "near_transition": -1.0,
+      "far_transition": -1.0,
+      "amount": "infinity_radius_px/64"
+    },
+    "godot_bokeh_shape_api": "RenderingServer.camera_attributes_set_dof_blur_bokeh_shape(DOF_BOKEH_CIRCLE)",
+    "godot_gather_radius_cap_px": 32.0,
+    "limit": "Godot physical branch keeps uncapped signed CoC in alpha and limits gather support to32px; source clamps signed CoC to+/-0.025*width. No claim of identical occlusion/gather/recombine."
+  },
+  "source_camera_legacy_fields": {
+    "DepthOfFieldFocalRegion_cm": 800.0,
+    "DepthOfFieldNearTransitionRegion_cm": 1200.0,
+    "DepthOfFieldFarTransitionRegion_cm": 3200.0,
+    "DepthOfFieldScale": 0.20000000298023224,
+    "note": "These are not inputs of native Diaphragm physical CoC; not converted into an artificial clear depth band."
+  },
+  "limits": [
+    "Source runtime FinalPostProcessSettings/CVar capture still absent.",
+    "Known source Blueprint and native camera class audit does not exclude all external runtime writers.",
+    "Cross-engine kernel/TAA/translucency/postprocess ordering still differ."
+  ]
+}

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c0gov3qj3kq0b"
+path="res://.godot/imported/original_native_grading.glsl-b41fa761b8bb74c0d224561e5b6dff67.res"
+
+[deps]
+
+source_file="res://native_grading_candidate/original_native_grading.glsl"
+dest_files=["res://.godot/imported/original_native_grading.glsl-b41fa761b8bb74c0d224561e5b6dff67.res"]
+
+[params]
+

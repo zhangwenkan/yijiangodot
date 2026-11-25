@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bjjk6npe63dfw"
+path="res://.godot/imported/original_native_bloom.glsl-45b26a24566659d0d00d820bd086f368.res"
+
+[deps]
+
+source_file="res://native_bloom_candidate/original_native_bloom.glsl"
+dest_files=["res://.godot/imported/original_native_bloom.glsl-45b26a24566659d0d00d820bd086f368.res"]
+
+[params]
+

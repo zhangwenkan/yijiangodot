@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://sdxd3jh8s5a7"
+path="res://.godot/imported/original_native_film.glsl-d36e7189810f71a10291e9e6d84230a5.res"
+
+[deps]
+
+source_file="res://native_film_candidate/original_native_film.glsl"
+dest_files=["res://.godot/imported/original_native_film.glsl-d36e7189810f71a10291e9e6d84230a5.res"]
+
+[params]
+
