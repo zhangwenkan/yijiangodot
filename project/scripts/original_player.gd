@@ -215,7 +215,7 @@ func _retry_floor_tangent_motion(motion: Vector3) -> void:
 	# Some original complex platforms can report the same upward contact at
 	# zero travel for every slide iteration. Only retry a motion whose contacts
 	# are all flat ground; any wall contact remains blocking. The capsule is
-	# swept above the numerical contact margin and swept back onto the floor.
+	# swept above the numerical contact margin, then that lift is unwound.
 	if motion.length_squared() < 0.000001 or get_slide_collision_count() == 0:
 		return
 	for i in get_slide_collision_count():
@@ -230,7 +230,10 @@ func _retry_floor_tangent_motion(motion: Vector3) -> void:
 		return
 	global_transform = raised
 	move_and_collide(motion,false,safe_margin)
-	move_and_collide(Vector3.DOWN*(CONTACT_MARGIN+MAX_STEP_HEIGHT),false,safe_margin)
+	# Only undo this retry's lift. An extra step-height descent can cross a
+	# source complex floor when its downward sweep misses the contact.
+	# Normal move_and_slide/floor snapping still handles terrain descents.
+	move_and_collide(Vector3.DOWN*CONTACT_MARGIN,false,safe_margin)
 
 func _update_animation(controls: Vector2, is_moving: bool) -> void:
 	if controls.length_squared() > 0.01:

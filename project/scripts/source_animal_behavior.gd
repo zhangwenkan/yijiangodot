@@ -2,7 +2,7 @@ extends Node
 ## Recovered animal behavior trees on the original Detour navigation domain.
 ## This adapter does not recreate UE CharacterMovement acceleration or avoidance.
 
-const NavigationSource = preload("res://scripts/source_navigation.gd")
+const NavigationSource = preload("res://scripts/source_navigation_partial.gd")
 const MANIFEST := "res://assets/source-animals/manifest.json"
 var source: Dictionary
 var navigation = NavigationSource.new()
@@ -24,6 +24,12 @@ func setup(slug: String, ambient_node: Node3D, player_node: Node3D) -> void:
 	report.rng_seed = str(rng.seed)
 	report.rng_initial_state = str(rng.state)
 	report.path_failure_samples = []
+	report.partial_requests = 0
+	report.partial_end = 0
+	report.partial_zero_displacement_requests = 0
+	report.complete_end = 0
+	report.partial_request_samples = []
+	report.partial_end_samples = []
 
 func _initialize_actors() -> void:
 	for entry in ambient.sprites:
@@ -207,7 +213,7 @@ func _begin_path(a: Dictionary, goal: Dictionary, post_wait: float, next_phase: 
 	if goal.is_empty():
 		a.wait = maxf(post_wait,0.1)
 		return
-	var path: Array[Dictionary] = navigation.route(a.anchor,goal)
+	var path: Array[Dictionary] = navigation.route_allow_partial(a.anchor,goal)
 	if path.is_empty():
 		report.path_failures += 1
 		if report.path_failure_samples.size() < 20:
@@ -216,6 +222,21 @@ func _begin_path(a: Dictionary, goal: Dictionary, post_wait: float, next_phase: 
 			report.path_failure_samples.append({"component":a.component,"tree":a.tree,"phase":a.phase,"seen_hero":a.seen_hero,"rng_seed":str(rng.seed),"rng_state":str(rng.state),"start":{"poly":int(a.anchor.poly),"point":[start_point.x,start_point.y,start_point.z]},"goal":{"poly":int(goal.poly),"point":[goal_point.x,goal_point.y,goal_point.z]}})
 		a.wait = maxf(post_wait,0.1)
 		return
+	# Native MoveTo permits partial paths. Store the original request separately;
+	# completion of its reachable corridor does not mean this target was reached.
+	var route_info: Dictionary = navigation.last_result
+	a.path_is_partial = route_info.get("status","") == "partial"
+	a.requested_goal = goal.duplicate(true)
+	a.partial_endpoint = route_info.get("endpoint",goal.point)
+	if a.path_is_partial:
+		report.partial_requests += 1
+		if route_info.get("zero_displacement_partial",false):
+			report.partial_zero_displacement_requests += 1
+		if report.partial_request_samples.size() < 20:
+			var source_start: Vector3 = a.anchor.point
+			var requested: Vector3 = goal.point
+			var endpoint: Vector3 = a.partial_endpoint
+			report.partial_request_samples.append({"component":a.component,"tree":a.tree,"start":{"poly":int(a.anchor.poly),"point":[source_start.x,source_start.y,source_start.z]},"requested_goal":{"poly":int(goal.poly),"point":[requested.x,requested.y,requested.z]},"endpoint":{"poly":int(route_info.last_reachable_poly),"point":[endpoint.x,endpoint.y,endpoint.z]},"target_reached":false,"endpoint_displacement_m":route_info.endpoint_displacement_m,"corridor":route_info.corridor,"selection_rule":route_info.selection_rule})
 	if a.initial_connector:
 		path.push_front({"point":a.anchor.point,"poly":a.anchor.poly,"connector":true})
 	a.path = path
@@ -273,6 +294,17 @@ func _advance(a: Dictionary, delta: float) -> void:
 		a.anchor = {"point":step.point,"poly":step.poly}
 		a.waypoint += 1
 		if int(a.waypoint)>=a.path.size():
+			if a.get("path_is_partial",false):
+				report.partial_end += 1
+				if report.partial_end_samples.size() < 20:
+					var requested: Vector3 = a.requested_goal.point
+					var endpoint: Vector3 = a.anchor.point
+					report.partial_end_samples.append({"component":a.component,"requested_goal":{"poly":int(a.requested_goal.poly),"point":[requested.x,requested.y,requested.z]},"endpoint":{"poly":int(a.anchor.poly),"point":[endpoint.x,endpoint.y,endpoint.z]},"path_finished":true,"target_reached":false,"unreached_distance_m":endpoint.distance_to(requested)})
+			else:
+				report.complete_end += 1
+			# Shipping OnPathFinished preserves success for a completed partial
+			# path, but clears the separate last-move-reached-goal flag. Thus
+			# BT_RunAway continues to its authored 0.5-second Wait child.
 			a.phase = a.next_phase
 			a.wait = a.post_wait
 			a.path = []
