@@ -18,6 +18,8 @@ var _camera: Camera3D
 var _reader
 var _busy := false
 var source_atmosphere_slug := ""
+var _saved_time_scale := 1.0
+var _time_frozen := false
 
 func capture(scene_root: Node, world: Node3D, source_environment: Environment, output_dir: String,
 		resolution: int = 128, capture_position: Vector3 = Vector3.ZERO) -> Dictionary:
@@ -34,14 +36,22 @@ func capture(scene_root: Node, world: Node3D, source_environment: Environment, o
 	report = {"status":"capturing","origin":[capture_position.x,capture_position.y,capture_position.z],
 		"resolution":resolution,"near_m":20.0,"face_order":FACE_NAMES,"lower_hemisphere":"black, direction.y < 0",
 		"input_format":"RGBA16F scene-linear before postprocessing", "disabled":[],"roughness_overrides":0,
-		"roughness_unhandled":[],"captures":[],"orientation":"Godot probe directions/up; normal viewport readback flipped vertically once",
+		"roughness_unhandled":[],"captures":[],"sky_feedback_overrides":0,
+		"sh9_feedback_overrides":0,"sh9_emission_feedback_overrides":0,"sh9_feedback_disable_errors":[],
+		"time_policy":"Scene processing and shader TIME frozen for all six faces",
+		"orientation":"Godot probe directions/up; normal viewport readback flipped vertically once",
 		"limits":["Godot sky convolution is not UE third-order SH.","Existing cross-engine materials, fog and direct lights remain capture inputs.",
-		"Six views use successive frames; shader TIME is not frozen.","Finite far plane encloses existing geometry; UE capture used reversed infinite projection."]}
+		"Frozen scene is a reconstructed-scene capture, not the original UE GPU buffer.","Finite far plane encloses existing geometry; UE capture used reversed infinite projection."]}
 	var mkdir_error := DirAccess.make_dir_recursive_absolute(output_dir)
 	if mkdir_error != OK:
 		_busy = false
 		return {"error":"Cannot create capture directory: %s" % mkdir_error}
 	# Pause scene logic before temporary material changes so drivers cannot overwrite them.
+	_saved_time_scale = Engine.time_scale
+	report["time_scale_before_capture"] = _saved_time_scale
+	Engine.time_scale = 0.0
+	report["time_scale_during_capture"] = Engine.time_scale
+	_time_frozen = true
 	_scan_scene(scene_root)
 	var capture_environment: Environment = source_environment.duplicate()
 	capture_environment.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
@@ -222,7 +232,16 @@ func _bind_material(material: Material) -> void:
 	var parameters: Dictionary = {}
 	for item in original.get_shader_uniform_list():
 		parameters[item.name] = material.get_shader_parameter(item.name)
-	_saved.append({"object":material,"shader":original,"parameters":parameters})
+	var has_sh9 := parameters.has("source_sh9_enabled")
+	var sh9_emission := has_sh9 and bool(material.get_meta("source_two_sided_foliage",false))
+	_saved.append({"object":material,"shader":original,"parameters":parameters,
+		"sh9_feedback":has_sh9,"sh9_emission_feedback":sh9_emission})
+	if has_sh9:
+		# SH also feeds leaf transmission through EMISSION. Disable its producer;
+		# clearing all EMISSION would erase real source-material self-illumination.
+		material.set_shader_parameter("source_sh9_enabled",false)
+		report.sh9_feedback_overrides += 1
+		if sh9_emission: report.sh9_emission_feedback_overrides += 1
 	if parameters.has("source_lf_count"):
 		material.set_shader_parameter("source_lf_count",0)
 	if parameters.has("source_lf_sun_enabled"):
@@ -245,15 +264,24 @@ func _bind_material(material: Material) -> void:
 			return
 		# Existing source shaders have no fragment early return. Preserve all other math.
 		var replacement := Shader.new()
-		replacement.code = code.insert(cursor-1,"\nROUGHNESS = 1.0; // source capture override\n")
+		# A disabled Environment does not override custom IRRADIANCE/RADIANCE.
+		# Suppress both current SH owners and any custom sky radiance at the final
+		# fragment output, so recapture cannot feed the old capture into itself.
+		replacement.code = code.insert(cursor-1,"\nROUGHNESS = 1.0; // source capture override\nIRRADIANCE = vec4(0.0, 0.0, 0.0, 1.0);\nRADIANCE = vec4(0.0, 0.0, 0.0, 1.0);\n")
 		_shader_cache[original.get_instance_id()] = replacement
 	material.shader = _shader_cache[original.get_instance_id()]
-	# Explicitly restore uniforms after shader replacement, then disable light functions.
+	# Shader replacement restores saved uniforms, including the SH switch.
+	# Reapply all capture-only switches after restoring the other parameters.
 	for parameter in parameters:
 		material.set_shader_parameter(parameter,parameters[parameter])
 	if parameters.has("source_lf_count"): material.set_shader_parameter("source_lf_count",0)
 	if parameters.has("source_lf_sun_enabled"): material.set_shader_parameter("source_lf_sun_enabled",false)
+	if has_sh9:
+		material.set_shader_parameter("source_sh9_enabled",false)
+		if material.get_shader_parameter("source_sh9_enabled") != false:
+			report.sh9_feedback_disable_errors.append(original.resource_path)
 	report.roughness_overrides += 1
+	report.sky_feedback_overrides += 1
 
 func _geometry_far(node: Node, origin: Vector3) -> float:
 	var far_value := 1800.0
@@ -295,6 +323,8 @@ func _cleanup() -> void:
 	_reader = null
 	var restoration_errors: Array[String] = []
 	var restored_entries := 0
+	var restored_sh9 := 0
+	var restored_sh9_emission := 0
 	for i in range(_saved.size()-1,-1,-1):
 		var state := _saved[i]
 		var object: Object = state.object
@@ -309,6 +339,9 @@ func _cleanup() -> void:
 					restoration_errors.append("Shader parameter did not restore: "+str(parameter))
 			if object.get("shader")!=state.shader:
 				restoration_errors.append("Shader resource did not restore.")
+			if state.get("sh9_feedback",false) and object.call("get_shader_parameter","source_sh9_enabled")==state.parameters["source_sh9_enabled"]:
+				restored_sh9 += 1
+				if state.get("sh9_emission_feedback",false): restored_sh9_emission += 1
 		elif state.has("method"):
 			object.call(state.method,state.value)
 			var getter := "is_processing" if state.method=="set_process" else "is_physics_processing"
@@ -321,8 +354,16 @@ func _cleanup() -> void:
 		restored_entries+=1
 	report["restored_scene_state"] = restoration_errors.is_empty()
 	report["restoration"] = {"entries":restored_entries,"errors":restoration_errors}
+	report["restored_sh9_feedback_overrides"] = restored_sh9
+	report["restored_sh9_emission_feedback_overrides"] = restored_sh9_emission
 	_saved.clear()
 	_shader_cache.clear()
+	if _time_frozen:
+		report["time_scale_before_restore"] = Engine.time_scale
+		Engine.time_scale = _saved_time_scale
+		_time_frozen = false
+		report["time_scale_after_capture"] = Engine.time_scale
+		report["time_scale_restored"] = Engine.time_scale == _saved_time_scale
 
 static func make_diffuse_sky(capture_cube: Cubemap, visible_ue_cube: Cubemap) -> Sky:
 	var material := ShaderMaterial.new()
@@ -338,4 +379,4 @@ static func make_diffuse_sky(capture_cube: Cubemap, visible_ue_cube: Cubemap) ->
 	return sky
 
 func _exit_tree() -> void:
-	if not _saved.is_empty(): _cleanup()
+	if not _saved.is_empty() or _time_frozen: _cleanup()

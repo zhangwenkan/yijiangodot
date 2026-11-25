@@ -13,16 +13,22 @@ var ambient: Node3D
 var startup_ticks := 2
 var disabled := false
 var rng := RandomNumberGenerator.new()
+var rng_seed_source := "randomize"
+var support_probe_last_hit: Dictionary = {}
+var support_probe_last_point := Vector3.ZERO
 
 func setup(slug: String, ambient_node: Node3D, player_node: Node3D) -> void:
 	ambient = ambient_node
 	player = player_node
 	source = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
 	navigation.setup(slug)
-	rng.randomize()
+	if not _configure_rng():
+		disabled = true
+		return
 	report = {"map":slug,"source_navigation":navigation.report,"active":0,"without_tree":0,"unmatched":[],"initial_connectors":[],"missing_actions":{},"moves":0,"path_failures":0,"surface_failures":0,"sticky_hero_detection":true,"native_character_movement":false,"random_sequence":"Godot RNG; source distributions, not original UE sequence","local_support_actors":0,"local_support_updates":0,"local_support_rejected":0,"local_support_rejections":[],"local_support_max_nav_delta":0.0}
 	report.rng_seed = str(rng.seed)
 	report.rng_initial_state = str(rng.state)
+	report.rng_seed_source = rng_seed_source
 	report.path_failure_samples = []
 	report.partial_requests = 0
 	report.partial_end = 0
@@ -277,8 +283,9 @@ func _advance(a: Dictionary, delta: float) -> void:
 			var support := _local_support(projected.point)
 			if support.is_empty() or absf(float(support.position.y)+0.025-pos.y)>maxf(0.20,amount*1.01):
 				report.local_support_rejected += 1
+				var support_detail := _support_diagnostic()
 				if report.local_support_rejections.size()<20:
-					report.local_support_rejections.append({"component":a.component,"position":[pos.x,pos.y,pos.z],"nav_position":[projected.point.x,projected.point.y,projected.point.z],"reason":"no nearby walkable original support" if support.is_empty() else "local step discontinuity","support_y":null if support.is_empty() else support.position.y})
+					report.local_support_rejections.append({"component":a.component,"position":[pos.x,pos.y,pos.z],"nav_position":[projected.point.x,projected.point.y,projected.point.z],"reason":"no nearby walkable original support" if support.is_empty() else "local step discontinuity","support_y":null if support.is_empty() else support.position.y,"support_classification":str(support_detail.get("classification","unknown")) if support.is_empty() else "step_discontinuity","support_probe":support_detail,"anchor":{"poly":int(a.anchor.poly),"point":[a.anchor.point.x,a.anchor.point.y,a.anchor.point.z]},"source_height_offset":a.height_offset,"movement_amount":amount,"step_limit":maxf(0.20,amount*1.01),"waypoint":int(a.waypoint),"requested_goal":_support_json_anchor(a.get("requested_goal",{})),"rng_seed":str(rng.seed),"rng_state":str(rng.state),"physics_frame":Engine.get_physics_frames()})
 				a.path = []
 				a.phase = "begin"
 				a.wait = 0.2
@@ -343,6 +350,9 @@ func _local_support(point: Vector3) -> Dictionary:
 	# This is not a claim to reproduce native UE CharacterMovement.
 	var ray := PhysicsRayQueryParameters3D.create(point+Vector3.UP*0.75,point-Vector3.UP*0.75,4)
 	var hit := ambient.get_world_3d().direct_space_state.intersect_ray(ray)
+	# Retain this SAME query for failure diagnostics; no extra ray or allocation.
+	support_probe_last_hit = hit
+	support_probe_last_point = point
 	if hit.is_empty() or hit.normal.y<0.71:
 		return {}
 	return hit
@@ -378,3 +388,36 @@ func _duck(a: Dictionary) -> void:
 		a.phase = "duck_move_wait"
 	elif a.phase == "duck_move_wait":
 		_begin_path(a,a.goal,0.0,"begin")
+
+func _configure_rng() -> bool:
+	# Explicit review-only opt-in happens before _initialize_actors consumes RNG.
+	# Default game launches retain randomize. Do not use a late verifier reseed.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--source-animal-seed="):
+			var value := arg.trim_prefix("--source-animal-seed=")
+			if not value.is_valid_int():
+				push_error("Invalid --source-animal-seed integer: "+value)
+				return false
+			rng.seed = int(value)
+			rng_seed_source = "explicit_setup_review_seed"
+			return true
+	rng.randomize()
+	rng_seed_source = "randomize"
+	return true
+
+func _support_json_anchor(value: Dictionary) -> Dictionary:
+	if value.is_empty():
+		return {}
+	var point: Vector3 = value.point
+	return {"poly":int(value.poly),"point":[point.x,point.y,point.z]}
+
+func _support_diagnostic() -> Dictionary:
+	# Serialize source metadata only on a rejection or explicit review request.
+	var point := support_probe_last_point
+	var result := {"point":[point.x,point.y,point.z],"above":0.75,"below":0.75,"mask":4,"walkable_normal_y":0.71,"classification":"no_ray_hit"}
+	var hit: Dictionary = support_probe_last_hit
+	if hit.is_empty():
+		return result
+	var collider: Node = hit.collider
+	result.merge({"classification":"slope_rejected" if hit.normal.y<0.71 else "walkable_hit","hit_position":[hit.position.x,hit.position.y,hit.position.z],"normal":[hit.normal.x,hit.normal.y,hit.normal.z],"face_index":hit.get("face_index",-1),"collider":str(collider.get_path()),"source_name":str(collider.get_meta("source_name","")),"source_mesh":str(collider.get_meta("source_mesh","")),"source_component":collider.get_meta("source_component",-1),"nav_to_hit_y":point.y-hit.position.y},true)
+	return result

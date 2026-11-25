@@ -65,7 +65,7 @@ func install(scene: Node, environment: Environment, capture_file: String, coeffi
 			"Current SH9 IRRADIANCE remains unchanged. Materials without SH9 may receive changed fallback diffuse from the new sky.",
 			"Godot QUALITY convolution and BRDF are used. Original UE mip0 also has a small GGX prefilter; this is not bit-exact.",
 			"The cube was captured from the reconstructed scene, not extracted as a native runtime UE GPU capture.",
-			"Capture predates later material refinements; do not call the stored scene radiance a live recapture.",
+			"Capture provenance is recorded by the shared manifest hash; stored radiance must be rebuilt after scene/material changes.",
 			"Only the identified incorrect adaptation probe is hidden; unrelated probes, if later added, are not removed."]}
 	set_mode(2)
 	return report
