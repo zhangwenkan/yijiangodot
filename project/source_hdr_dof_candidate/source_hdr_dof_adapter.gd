@@ -51,9 +51,9 @@ func install(camera: Camera3D, policy_path: String, _options: Dictionary = {}) -
 	camera.set_meta("source_dof_owner",self)
 	effect.failed.connect(_on_effect_failed)
 	report={"installed":true,"status":"HDR DOF compositor candidate","effect":configured,
-		"builtin_dof_disabled":true,"chain":"[optional distortion] -> HDR DOF -> Native Bloom -> Native Film",
+		"builtin_dof_disabled":true,"chain":"[optional distortion] -> HDR DOF -> [source separate-translucency owner] -> Native Bloom -> Native Film",
 		"restore_order":"after house.reset_outdoors(), restore HDR DOF before atmosphere/renderer compositor owners",
-		"limits":["Original separate-translucency/transparent depth routing not restored.",
+		"limits":["Three source AfterDOF emitters have a separate owner; full UE resolution/recombine remains different.",
 			"Godot circle gather retains its foreground/background rules but differs from UE.",
 			"Do not enable TAA/upscalers after Film; parent keeps verified FXAA configuration."]}
 	return report

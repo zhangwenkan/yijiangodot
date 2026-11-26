@@ -20,6 +20,7 @@ var birds: RefCounted
 var leaf: RefCounted
 var atmosphere: Node
 var depth_of_field: Node
+var separate_translucency: Node
 var _scene: Node
 var _environment: Environment
 var _sun: DirectionalLight3D
@@ -117,6 +118,9 @@ func setup(scene: Node, enable_distortion := false, enable_atmosphere := false) 
 	add_child(depth_of_field)
 	report["depth_of_field"] = depth_of_field.install(scene.camera, "res://source_dof_candidate/source-dof.json")
 	depth_of_field.attach_house_driver(scene.house_driver)
+	separate_translucency = load("res://source_separate_translucency/separate_adapter.gd").new()
+	add_child(separate_translucency)
+	report["separate_translucency"] = separate_translucency.install(scene)
 	scene.house_driver.house_state_changed.connect(_on_house_state)
 	_on_house_state(scene.house_driver.is_in_house)
 	report.status = "installed"
@@ -157,6 +161,7 @@ func shutdown() -> Dictionary:
 		if _scene.house_driver.house_state_changed.is_connected(_on_house_state):
 			_scene.house_driver.house_state_changed.disconnect(_on_house_state)
 	var restored := {"status":"restored"}
+	if is_instance_valid(separate_translucency): restored["separate_translucency"] = separate_translucency.restore()
 	if is_instance_valid(depth_of_field): restored["depth_of_field"] = depth_of_field.restore()
 	if is_instance_valid(atmosphere): restored["atmosphere"] = atmosphere.restore()
 	if is_instance_valid(reflection): restored["reflection"] = reflection.restore()
@@ -192,6 +197,7 @@ func shutdown() -> Dictionary:
 	distortion = null
 	bloom = null
 	film = null
+	separate_translucency = null
 	reflection = null
 	transparent_sky = null
 	local_cones = null

@@ -41,7 +41,7 @@ func configure(policy_path: String) -> Dictionary:
 		"kernel":"Godot 4.7.2 circular half-resolution gather; HIGH radial scale .5; deterministic",
 		"limits":["Not UE Diaphragm gather/scatter/recombine.",
 			"Source CoC clamped to .025W; gather support remains32px.",
-			"Transparent layers currently use shared scene depth; original SeparateTranslucency is not reproduced.",
+			"Scene-depth DOF excludes three source AfterDOF emitters through a separate owner; this is not complete UE SeparateTranslucency.",
 			"Half-size flooring and sampling offsets follow Godot, including odd dimensions.",
 			"Shader and runtime require parent GPU validation."]}
 	RenderingServer.call_on_render_thread(_initialize)

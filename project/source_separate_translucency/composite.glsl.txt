@@ -1,0 +1,8 @@
+#version 450
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(set=0,binding=0,rgba16f) uniform image2D scene_color;
+layout(set=0,binding=1,rgba16f) uniform readonly image2D separate_color;
+layout(set=0,binding=2,rgba16f) uniform writeonly image2D diagnostic_before;
+layout(set=0,binding=3,rgba16f) uniform writeonly image2D diagnostic_after;
+layout(push_constant,std430) uniform Push{ivec2 size;int capture;int unused;}p;
+void main(){ivec2 xy=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(xy,p.size)))return;vec4 s=imageLoad(scene_color,xy),t=imageLoad(separate_color,xy);vec4 result=vec4(t.rgb+s.rgb*(1.0-t.a),s.a);imageStore(scene_color,xy,result);if(p.capture!=0){imageStore(diagnostic_before,xy,s);imageStore(diagnostic_after,xy,result);}}

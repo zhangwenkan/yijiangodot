@@ -26,7 +26,7 @@
 - 两图Water各1面恢复原roughness=0，原distortion加入共享RGBA8累积与单次apply，几何和主材质参数保持；不再同时启用第二次屏幕差分折射。RainScale=0时原异常隐式normal采样仍未证实，不能因为RainNormalPower=0便把法线Z直接当1，也不能填任意常量、UV0或epsilon冒称等价。完整透明排序和原切线仍有限制。
 - 真正TLV仍缺近远两级体积、灯注入、阴影、LightFunction及滤波。25个受光烟/水花的原直接光也是TLV，当前Godot Lambert仍为适配；禁止套opaque的LF/cone light()并称修复原受光。公开Compositor缺完整shadow数据，不可拿camera depth或无阴影常量体积充数。Ocean L0专项只是贡献诊断，未默认启用，不是完整TLV替代。
 - 默认反射按原捕获规则使用128²六面RGBA16F场景cube、原gain一次、下半球黑色，保留可见天空并停用1个错误适配probe；probe须在renderer.setup前创建，屋内反射关闭。2026-11-26已用当前材质重新捕获并更新两图SH9/cube：六面期间冻结Shader时间、清IRRADIANCE/RADIANCE反馈，并临时关闭SH开关含叶片背光EMISSION；保留真正自发光。capture-v2重复RAW/画面/材质恢复、真实1→0→1暂停恢复、compare-v2四机位及production-house-v2状态切换/退出通过。cube仍来自重建场景，Godot QUALITY卷积/BRDF非原UE逐像素等价。已审111/26非SH余项全unshaded，不为假想漫反射倍增再次压低环境能量。
-- 景深当前为HDR DOF→Bloom→Film，固定室外32.2m/.08、室内14.7m/.4，按真实缓冲宽度计算原CoC；仍缺完整UE Diaphragm、SeparateTranslucency，gather上限32px。镜头保持原方向和40°水平视场，不添加周期晃动。固定角度或停留稳定不代表行走高度舒适性已解决；前景FXAA相位0和原五值裁切须保留，不擅删原遮罩。
+- 景深当前为HDR DOF→三个源景深后发射器的独立层→Bloom→Film，固定室外32.2m/.08、室内14.7m/.4，按真实缓冲宽度计算原CoC。独立层仅无名两火焰和游仙萤火虫；Water/Ocean/瀑布/烟/水花显式false、落叶Masked保持原阶段。仍缺完整UE Diaphragm及动态独立层分辨率/重组/alpha语义，gather上限32px。镜头保持原方向和40°水平视场，不添加周期晃动。固定角度或停留稳定不代表行走高度舒适性已解决；前景FXAA相位0和原五值裁切须保留，不擅删原遮罩。
 - 原瀑布两面、4处缸桶水面、游仙20只惊鸟及1组落叶材质已恢复。bagua实际是缸桶水；没有进入编译shader的实例细分/位移参数不强行补入。瀑布每面335顶点/598三角形，Godot导入已生成完整切线，原TX与运行切线平均角差.382755°、最大2.020010°；不能再称运行缺切线或据此解释整体粗糙。源PN自适应细分及完整TLV仍缺，Blender切线候选未执行。落叶独立透光阴影与完整BRDF亦未等价。
 - 原Detour导航与动物树已接入；2026-11-26按原生MoveTo默认AllowPartialPath增设显式route_allow_partial，保留原目标、可达末端与target_reached=false，原route仍完整路径专用。生产20旧失败样本partial、100完整路径不变；真实猴子20次逐条回放均完成，未跨断区。游仙生产60秒36/36移动、4次partial均结束、path/surface失败0，但4次原支撑检查拒绝仍保留。此前首轮600秒超时无最终JSON、原因未定位，另一次诊断60秒通过但partial0，不能丢弃失败或声称历史83次全解决。原三维Actor逃离方向、Navigable随机查询、胶囊运动及随机序列仍有差异；不得扩大导航或补造源缺动作。
 - 全图通行与海岸禁行尚未验完。2026-11-26连续输入已走通无名码头→演武场西侧原陆路、两主屋及游仙鸟院；两主屋生产往返68.69/43.91m、各2次室内外转换通过。游仙门口曾穿地19.5cm，逐调用确认平地重试多做20cm下扫且漏碰，已改为只收回自身1.2cm抬升，普通step/slide/snap保留；码头四向/台阶上下6项通过。演武场首轮稀疏路线逆序在岸边受阻，旧新控制器同样如此且该段未调用平地补偿；改为跟踪实际去程后完整306.18m往返通过，未删墙/放宽海域。18岸线样本均有碰撞/边缘阻止，其中6所选源墙、8边缘检查、4其他原墙；仅此范围，非全岸线或镜头舒适性验收。
@@ -43,3 +43,5 @@
 2026-11-26继续推进：动物原四次支撑拒绝实际命中宝箱/木板陡面，不是射线漏地，不放宽坡度/支撑保护。生产新增原次命中诊断与初始化前可选`--source-animal-seed`；默认随机不变。两个30秒固定60Hz回归的36动物、166请求和状态完全一致，各仍有1次宝箱坡面拒绝；10次partial中9次结束、末次截止时仍moving，不记全解决。证据`workbench/reports/animal-support-20261126/`。
 
 镜头专项`workbench/reports/camera-follow-20261126/`确认8/3适配平滑造成台阶停止后33–37cm追随（26–29px），原构造/BP默认lag关闭。去平滑候选虽消除人物漂移，同绘制时刻背景最大单帧位移10.33→16.29px，未部署；原运行时和正常速度体验仍待核。进出屋距离直接跳变有原BP依据，未新增缓动。
+
+2026-11-26透明层落地：无名两火焰、游仙萤火虫按源默认AfterDOF独立合成，Torch→Flame同组件顺序保留。Node visible/layers及模拟不改，仅隐藏原RS实例；真实遮挡/逐发射器HDR诊断与`production-integration-v4`三访图回归通过。临时DOF enabled开关保留owner；真实失败或显式owner.restore才还原preDOF链。原v1/v2/v3覆盖失败全部保留，最终使用有界可见采样且空候选同样参与数值检查，不宣称每帧必有萤火虫。两火焰非零背景仍有已记录半精度差异，游仙重复画面少量背景变化未定因；完整UE分辨率/重组/alpha、TLV及Cascade随机序列仍缺。详情`docs/RESTORATION_PROGRESS_20261126.md`与`workbench/reports/transparency-order-20261126/`。

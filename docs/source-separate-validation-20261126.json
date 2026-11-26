@@ -1,0 +1,97 @@
+{
+  "date": "2026-11-26",
+  "run": "production-integration-v4",
+  "scope": "Three source default-AfterDOF emitters. Conditional visible-sample and recovery regression; not native UE frame equality or art acceptance.",
+  "engine": {
+    "exit": 0,
+    "seconds": 140.43700000000013,
+    "expected_error_count": 1,
+    "unexpected_errors": [],
+    "warnings": []
+  },
+  "checks": {
+    "runtime_complete_without_failures": true,
+    "process_exit_zero": true,
+    "no_unexpected_engine_errors": true,
+    "expected_dof_failure_was_exercised": true,
+    "three_map_visits": true,
+    "all_hdr_numeric_checks": true,
+    "every_capture_registered_and_analyzed": true,
+    "source_particle_animation_advanced": true,
+    "all_dynamic_views_have_source_coverage": true,
+    "hidden_source_parents_have_no_layer_pixels": true,
+    "restored_source_parents_have_layer_pixels": true,
+    "bounded_observation_contract": true,
+    "dynamic_camera_and_simulation_interval": true,
+    "temporary_dof_disable_preserved_ownership": true,
+    "explicit_dof_restore_and_reinstall": true,
+    "loaded_glsl_matches_run_start_hashes": true
+  },
+  "hdr_captures": 26,
+  "visible_candidates": 15,
+  "empty_candidates_retained": 0,
+  "dynamic": [
+    {
+      "map": "wuming",
+      "index": 0,
+      "first_capture": "0-wuming-dynamic-first-candidate-01",
+      "second_capture": "0-wuming-dynamic-second-candidate-01",
+      "changed_layer_pixels": 427,
+      "source_buffer_changed": true,
+      "first_coverage": 305,
+      "second_coverage": 335,
+      "camera_unchanged": true,
+      "frame_gap": 50,
+      "source_time_advanced": true,
+      "errors": []
+    },
+    {
+      "map": "youxian",
+      "index": 1,
+      "first_capture": "1-youxian-dynamic-first-candidate-01",
+      "second_capture": "1-youxian-dynamic-second-candidate-01",
+      "changed_layer_pixels": 107,
+      "source_buffer_changed": true,
+      "first_coverage": 21,
+      "second_coverage": 86,
+      "camera_unchanged": true,
+      "frame_gap": 50,
+      "source_time_advanced": true,
+      "errors": []
+    },
+    {
+      "map": "wuming",
+      "index": 2,
+      "first_capture": "2-wuming-dynamic-first-candidate-01",
+      "second_capture": "2-wuming-dynamic-second-candidate-01",
+      "changed_layer_pixels": 387,
+      "source_buffer_changed": true,
+      "first_coverage": 316,
+      "second_coverage": 253,
+      "camera_unchanged": true,
+      "frame_gap": 50,
+      "source_time_advanced": true,
+      "errors": []
+    }
+  ],
+  "shader_sources": {
+    "composite.glsl.txt": "1ce5df42f24350bac9a7b8fbc889255509c1a0f8b61d2ab3b26dbd611bb54cf6",
+    "separate.frag.glsl.txt": "d58605a668d2e19d2a55d324e1caed05f5a7c147b9b5cb7fb0f92d746fea4a5d",
+    "separate.vert.glsl.txt": "19a71c7e37ed653bd9f580e7fe42e7bfc9afdfc5c47fb3573546ffdf33659455",
+    "separate_adapter.gd": "7bf1e376ff8589ba012385e76c0b6a73302f624fc747c6a8b728f42af8502bd3",
+    "separate_effect.gd": "912065d81f609415cf6f0f0d884228b8aae7d1a2b3e82dd0f1b873a3b302c7bc"
+  },
+  "renderer_sha256": "c1455ace3ca6591c03bd16c221a51a8d8971ba36bf1509aba5c6240b380f8f12",
+  "full_local_evidence": "workbench/reports/transparency-order-20261126/production-integration-v4",
+  "retained_failed_runs": [
+    "production-integration-v1",
+    "production-integration-v2",
+    "production-integration-v3"
+  ],
+  "remaining": [
+    "Full UE Diaphragm and separate-layer resolution/recombine/alpha semantics",
+    "TLV direct lighting and shadow injection",
+    "Native particle random sequence",
+    "Recorded nonzero-background fire differences and untouched Youxian background variability"
+  ]
+}

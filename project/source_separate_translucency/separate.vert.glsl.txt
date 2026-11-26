@@ -1,0 +1,134 @@
+#version 450
+// Uploads only the existing Blender-authored quad and existing particle transforms.
+layout(location=0) in vec3 source_position;
+layout(location=1) in vec2 source_uv;
+struct Particle {vec4 center_angle;vec4 scale_frame;vec4 tint;vec4 pivot_flags;vec4 axis;};
+layout(set=0,binding=0,std430) readonly buffer Instances {Particle instances[];};
+layout(set=0,binding=1,std140) uniform Frame {
+ mat4 projection; mat4 inverse_projection; mat4 world_to_view; mat4 camera;
+ vec4 size; vec4 material; vec4 atlas_fog;
+ vec4 hf0; vec4 hf1; vec4 hfcolor; vec4 hfdir; vec4 hfdircolor; vec4 hftail;
+} frame;
+// UE4.26 HeightFogCommon analytic model with shipping-game component constants.
+// Input positions are Godot metres; internal distances stay Unreal centimetres.
+// Return vec4(premultiplied inscattering, source_hf_tmp_transmission), NOT Godot FOG convention.
+
+
+
+
+
+
+
+
+
+
+
+
+
+float source_hf_line_integral(float source_hf_tmp_falloff, float source_hf_tmp_dz, float source_hf_tmp_origin_density) {
+    float source_hf_tmp_f = max(-127.0, source_hf_tmp_falloff * source_hf_tmp_dz);
+    // Avoid evaluating the undefined 0/0 branch; source selects the same Taylor limit.
+    float source_hf_tmp_integral = 0.6931471805599453 - 0.2402265069591007 * source_hf_tmp_f;
+    if (abs(source_hf_tmp_f) > 0.01) { source_hf_tmp_integral = (1.0-exp2(-source_hf_tmp_f))/source_hf_tmp_f; }
+    return source_hf_tmp_origin_density * source_hf_tmp_integral;
+}
+
+float source_hf_origin_density(vec3 source_hf_tmp_layer, float source_hf_tmp_height, bool source_hf_tmp_excluded) {
+    float source_hf_tmp_exponent = -source_hf_tmp_layer.y * (source_hf_tmp_height-source_hf_tmp_layer.z);
+    source_hf_tmp_exponent = source_hf_tmp_excluded ? min(127.0, source_hf_tmp_exponent) : clamp(source_hf_tmp_exponent,-125.0,126.0);
+    return source_hf_tmp_layer.x * exp2(source_hf_tmp_exponent);
+}
+
+vec3 source_hf_directional(vec3 source_hf_tmp_ray_direction, float source_hf_tmp_optical_depth) {
+    if (!(frame.hftail.z>0.5)) { return vec3(0.0); }
+    float source_hf_tmp_lobe = pow(clamp(dot(source_hf_tmp_ray_direction,frame.hfdir.xyz),0.0,1.0),
+        clamp(frame.hfdircolor.w,0.000001,1000.0));
+    return frame.hfdircolor.xyz * frame.hftail.y * source_hf_tmp_lobe
+        * (1.0-clamp(exp2(-source_hf_tmp_optical_depth),0.0,1.0));
+}
+
+vec4 source_height_fog(vec3 source_hf_tmp_camera_world_m, vec3 source_hf_tmp_receiver_world_m) {
+    float source_hf_tmp_observer_height = min(source_hf_tmp_camera_world_m.y*100.0,frame.hfdir.w);
+    vec3 source_hf_tmp_ray_cm = (source_hf_tmp_receiver_world_m-source_hf_tmp_camera_world_m)*100.0;
+    source_hf_tmp_ray_cm.y += source_hf_tmp_camera_world_m.y*100.0-source_hf_tmp_observer_height;
+    float source_hf_tmp_original_length = length(source_hf_tmp_ray_cm);
+    if (source_hf_tmp_original_length <= max(frame.hf1.w,0.000001)
+        || (frame.hfcolor.w > 0.0 && source_hf_tmp_original_length > frame.hfcolor.w)) {
+        return vec4(0.0,0.0,0.0,1.0);
+    }
+    vec3 source_hf_tmp_direction = source_hf_tmp_ray_cm / source_hf_tmp_original_length;
+    float source_hf_tmp_ray_length = source_hf_tmp_original_length;
+    float source_hf_tmp_dz = source_hf_tmp_ray_cm.y;
+    bool source_hf_tmp_excluded = frame.hf1.w > 0.0;
+    if (source_hf_tmp_excluded) {
+        float source_hf_tmp_exclusion_t = frame.hf1.w/source_hf_tmp_original_length;
+        source_hf_tmp_observer_height += source_hf_tmp_exclusion_t*source_hf_tmp_ray_cm.y;
+        source_hf_tmp_ray_length = (1.0-source_hf_tmp_exclusion_t)*source_hf_tmp_original_length;
+        source_hf_tmp_dz = (1.0-source_hf_tmp_exclusion_t)*source_hf_tmp_ray_cm.y;
+    }
+    float source_hf_tmp_shared = source_hf_line_integral(frame.hf0.xyz.y,source_hf_tmp_dz,
+        source_hf_origin_density(frame.hf0.xyz,source_hf_tmp_observer_height,source_hf_tmp_excluded));
+    source_hf_tmp_shared += source_hf_line_integral(frame.hf1.xyz.y,source_hf_tmp_dz,
+        source_hf_origin_density(frame.hf1.xyz,source_hf_tmp_observer_height,source_hf_tmp_excluded));
+    float source_hf_tmp_transmission = max(clamp(exp2(-source_hf_tmp_shared*source_hf_tmp_ray_length),0.0,1.0),1.0-frame.hf0.w);
+    float source_hf_tmp_directional_depth = source_hf_tmp_shared*max(source_hf_tmp_ray_length-max(frame.hftail.x,0.0),0.0);
+    vec3 source_hf_tmp_rgb = frame.hfcolor.xyz*(1.0-source_hf_tmp_transmission)+source_hf_directional(source_hf_tmp_direction,source_hf_tmp_directional_depth);
+    return vec4(source_hf_tmp_rgb,source_hf_tmp_transmission);
+}
+
+float source_hf_sky_depth(vec3 source_hf_tmp_layer, float source_hf_tmp_height, float source_hf_tmp_direction_y) {
+    if (source_hf_tmp_layer.x <= 0.0) { return 0.0; }
+    // Analytic infinite ray, avoiding arbitrary scene-far clipping or density*infinity NaNs.
+    if (source_hf_tmp_layer.y*source_hf_tmp_direction_y <= 0.0) { return 1.0e30; }
+    return source_hf_origin_density(source_hf_tmp_layer,source_hf_tmp_height,frame.hf1.w>0.0)/(source_hf_tmp_layer.y*source_hf_tmp_direction_y);
+}
+
+vec4 source_height_fog_sky(vec3 source_hf_tmp_camera_world_m, vec3 source_hf_tmp_sky_direction) {
+    if (frame.hfcolor.w > 0.0) { return vec4(0.0,0.0,0.0,1.0); }
+    vec3 source_hf_tmp_direction = normalize(source_hf_tmp_sky_direction);
+    float source_hf_tmp_h = min(source_hf_tmp_camera_world_m.y*100.0,frame.hfdir.w)
+        + max(frame.hf1.w,0.0)*source_hf_tmp_direction.y;
+    float source_hf_tmp_optical_depth = source_hf_sky_depth(frame.hf0.xyz,source_hf_tmp_h,source_hf_tmp_direction.y)
+        + source_hf_sky_depth(frame.hf1.xyz,source_hf_tmp_h,source_hf_tmp_direction.y);
+    float source_hf_tmp_transmission = max(clamp(exp2(-source_hf_tmp_optical_depth),0.0,1.0),1.0-frame.hf0.w);
+    return vec4(frame.hfcolor.xyz*(1.0-source_hf_tmp_transmission)+source_hf_directional(source_hf_tmp_direction,source_hf_tmp_optical_depth),source_hf_tmp_transmission);
+}
+
+vec4 source_height_fog_to_godot(vec4 source_hf_tmp_source_fog, bool source_hf_tmp_attenuate_only) {
+    float source_hf_tmp_opacity = clamp(1.0-source_hf_tmp_source_fog.a,0.0,1.0);
+    // Godot multiplies FOG.rgb by FOG.a internally. Preserve directional HDR separately
+    // from the source_hf_tmp_opacity cap by dividing the entire source premultiplied RGB by source_hf_tmp_opacity.
+    return vec4((source_hf_tmp_attenuate_only || source_hf_tmp_opacity<=0.0) ? vec3(0.0) : source_hf_tmp_source_fog.rgb/source_hf_tmp_opacity,source_hf_tmp_opacity);
+}
+
+layout(location=0) out vec2 uv;
+layout(location=1) flat out vec4 tint;
+layout(location=2) out float receiver_z;
+layout(location=3) out vec4 vertex_fog;
+layout(location=4) out float particle_frame;
+vec3 safe_unit(vec3 v){return v*inversesqrt(max(dot(v,v),0.00000001));}
+void main(){
+ Particle p=instances[gl_InstanceIndex];
+ vec3 right=frame.camera[0].xyz, up=frame.camera[1].xyz, front=frame.camera[2].xyz;
+ if(p.pivot_flags.z>0.5){up=vec3(0,1,0);right=normalize(cross(up,front));front=normalize(cross(right,up));}
+ float angle=p.center_angle.w;
+ vec3 x=right*cos(angle)+up*sin(angle), y=up*cos(angle)-right*sin(angle);
+ // Only source alignments 0 and 2 occur in these three source emitters.
+ if(p.pivot_flags.w>1.5){
+  vec3 camera_direction=safe_unit((frame.camera[3].xyz-p.center_angle.xyz)*100.0);
+  vec3 down=safe_unit(cross(p.axis.xyz,camera_direction));
+  float source_angle=-angle+1.5707963705062866;
+  x=sin(source_angle)*down+cos(source_angle)*p.axis.xyz;
+  y=sin(source_angle)*p.axis.xyz-cos(source_angle)*down;
+  front=safe_unit(cross(x,y));
+ }
+ // Keep the original MODELVIEW_MATRIX and vertex evaluation order.
+ mat4 modelview=frame.world_to_view*mat4(vec4(x*p.scale_frame.x,0),vec4(y*p.scale_frame.y,0),vec4(front*p.scale_frame.z,0),vec4(p.center_angle.xyz,1));
+ vec3 pos=source_position;pos.xy+=vec2(p.pivot_flags.x,-p.pivot_flags.y);
+ vec4 view=modelview*vec4(pos,1);
+ vec3 world=(frame.camera*modelview*vec4(pos,1)).xyz;
+ gl_Position=frame.projection*view;
+ uv=source_uv;particle_frame=p.scale_frame.w;
+ tint=p.tint; receiver_z=view.z;
+ vertex_fog=frame.atlas_fog.z>0.5?source_height_fog(frame.camera[3].xyz,world):vec4(0,0,0,1);
+}
