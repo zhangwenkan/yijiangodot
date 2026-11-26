@@ -1,0 +1,75 @@
+#version 450
+
+// Stage-only: one resolved source light per dispatch, one cascade per binding.
+// Caller RGB = source light RGB / PI * attenuation * source shadow/LF/cloud,
+// after SOURCE outer fade, atmosphere and clipping masking, in linear units.
+// In particular LF precedes the source outer shadow fade: do not multiply LF
+// again here. Alpha = sun attenuation * faded shadow * masking; local alpha=0.
+// Caller MUST certify complete shadow/LF resolution BEFORE dispatch, clear the
+// 16-byte status buffer, and reject ALL output if status.error_mask is nonzero.
+// GPU validates size/finiteness/nonzero directions. Missing inputs hard fail.
+// Layout is [z][y][x], x fastest. Directions point from W to light in UE XYZ.
+// Direction .w is unused. Caller clears both target images before the first light.
+// Dispatch lights sequentially with an image barrier between them. Half-float
+// quantization occurs on EACH imageStore, as in per-light half target blending.
+layout(local_size_x=4, local_size_y=4, local_size_z=4) in;
+layout(set=0, binding=0, std430) readonly buffer ResolvedLight { vec4 values[]; } resolved;
+layout(set=0, binding=1, std430) readonly buffer LightDirections { vec4 values[]; } directions;
+layout(set=0, binding=2, rgba16f) uniform image3D ambient_volume;
+layout(set=0, binding=3, rgba16f) uniform image3D directional_volume;
+layout(set=0, binding=4, std430) buffer ValidationStatus {
+    uint error_mask; // 1: input, 2: direction, 4: buffer size, 8: target size, 16: overflow.
+    uint invalid_voxel_count;
+    uint reserved0;
+    uint reserved1;
+} status;
+bool finite4(vec4 v) { return !any(isnan(v)) && !any(isinf(v)); }
+void reject_voxel(uint reason) {
+    atomicOr(status.error_mask, reason);
+    atomicAdd(status.invalid_voxel_count, 1u);
+}
+void main() {
+    uvec3 cell = gl_GlobalInvocationID;
+    uint dim = uint(imageSize(ambient_volume).x);
+    if (any(greaterThanEqual(cell, uvec3(dim)))) return;
+    if (any(notEqual(imageSize(ambient_volume), ivec3(dim))) ||
+            any(notEqual(imageSize(directional_volume), ivec3(dim)))) {
+        reject_voxel(8u);
+        return;
+    }
+    uint index = (cell.z * dim + cell.y) * dim + cell.x;
+    if (uint(resolved.values.length()) != dim*dim*dim ||
+            uint(directions.values.length()) != dim*dim*dim) {
+        reject_voxel(4u);
+        return;
+    }
+    vec4 light_value = resolved.values[index];
+    vec4 direction_value = directions.values[index];
+    if (!finite4(light_value) || !finite4(direction_value)) {
+        reject_voxel(1u);
+        return;
+    }
+    if (!(dot(direction_value.xyz, direction_value.xyz) > 1e-12)) {
+        reject_voxel(2u);
+        return;
+    }
+    vec3 light_direction = normalize(direction_value.xyz);
+    vec4 ambient = vec4(light_value.rgb * 0.282095, light_value.a);
+    vec3 basis = vec3(-light_direction.y, light_direction.z, -light_direction.x) * 0.488603;
+    // Keep the source operation order: form RGB for each basis, then dot luma.
+    vec3 luma = vec3(0.3, 0.59, 0.11);
+    vec4 directional = vec4(dot(light_value.rgb * basis.x, luma),
+                            dot(light_value.rgb * basis.y, luma),
+                            dot(light_value.rgb * basis.z, luma), 0.0);
+    ivec3 coordinate = ivec3(cell);
+    ambient += imageLoad(ambient_volume, coordinate);
+    directional += imageLoad(directional_volume, coordinate);
+    if (!finite4(ambient) || !finite4(directional) ||
+            any(greaterThan(abs(ambient), vec4(65504.0))) ||
+            any(greaterThan(abs(directional), vec4(65504.0)))) {
+        reject_voxel(16u);
+        return;
+    }
+    imageStore(ambient_volume, coordinate, ambient);
+    imageStore(directional_volume, coordinate, directional);
+}

@@ -45,3 +45,5 @@
 镜头专项`workbench/reports/camera-follow-20261126/`确认8/3适配平滑造成台阶停止后33–37cm追随（26–29px），原构造/BP默认lag关闭。去平滑候选虽消除人物漂移，同绘制时刻背景最大单帧位移10.33→16.29px，未部署；原运行时和正常速度体验仍待核。进出屋距离直接跳变有原BP依据，未新增缓动。
 
 2026-11-26透明层落地：无名两火焰、游仙萤火虫按源默认AfterDOF独立合成，Torch→Flame同组件顺序保留。Node visible/layers及模拟不改，仅隐藏原RS实例；真实遮挡/逐发射器HDR诊断与`production-integration-v4`三访图回归通过。临时DOF enabled开关保留owner；真实失败或显式owner.restore才还原preDOF链。原v1/v2/v3覆盖失败全部保留，最终使用有界可见采样且空候选同样参与数值检查，不宣称每帧必有萤火虫。两火焰非零背景仍有已记录半精度差异，游仙重复画面少量背景变化未定因；完整UE分辨率/重组/alpha、TLV及Cascade随机序列仍缺。详情`docs/RESTORATION_PROGRESS_20261126.md`与`workbench/reports/transparency-order-20261126/`。
+
+2026-11-26太阳TLV候选已实际打通probe真实Godot阴影/原LF→两级64³半浮点SH/滤波→Ocean、Water、Waterfall、Smoke1、SmokeSubUV、Splash六族接收，但仅显式冻结诊断，默认生产未启用。`compute-v4`10组raw注入及隔离filter各≤1 half ULP；端到端累积差异另记，不声称逐位一致。`receiver-v3`10机位/20级体积数值和40卷上传回读通过，六族单目标有可见贡献，9机位冻结/旁路/恢复完全相同；游仙default仍有3项精确图像失败，因此整套未通过。v2诊断把漂移定位到景深前HDR，实际Shader时间、深度、CoC和独立粒子层相同，上游具体原因未定。独立probe对风动植被与人物billboard的相机语义仍未与主视图对齐，另缺实时双级原子更新、局部灯TLV及粒子原offset；不得直接把冻结快照接入行走默认入口。室内仍保留3/π太阳并关闭LF/阴影，冻结测试必须显式同步original_lightfunctions状态；共享瀑布为2表面/1材质。失败及备用引擎补丁全部保留，详见`docs/TLV_SUN_PROGRESS_20261126.md`与`workbench/reports/tlv-shadow-20261126/`。

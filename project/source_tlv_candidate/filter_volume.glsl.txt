@@ -1,0 +1,39 @@
+#version 450
+
+// Candidate precision repair for the same SOURCE eight half-voxel samples.
+// compute-v3 measured downward errors consistent with intermediate sampler
+// quantization and the final half write; the internal rounding is not proven.
+// Eight sample coordinates are all exact half-texel positions, so
+// implement each trilinear sample using its eight exact texels in float32.
+// Same clamp boundary, sample order, weights and one final half write as before.
+// No production performance claim: 64 texelFetch operations replace 8 samples.
+layout(local_size_x=4, local_size_y=4, local_size_z=4) in;
+layout(set=0, binding=0) uniform sampler3D volume_input;
+layout(set=0, binding=1, rgba16f) uniform writeonly image3D volume_output;
+
+vec4 source_half_voxel_sample(ivec3 cell, ivec3 step, ivec3 last) {
+    precise vec4 value = vec4(0.0);
+    for (int z=0; z<2; ++z) {
+        for (int y=0; y<2; ++y) {
+            for (int x=0; x<2; ++x) {
+                ivec3 p = clamp(cell + ivec3(x,y,z) * step, ivec3(0), last);
+                value += texelFetch(volume_input, p, 0);
+            }
+        }
+    }
+    return value * 0.125;
+}
+
+void main() {
+    ivec3 cell = ivec3(gl_GlobalInvocationID);
+    ivec3 size = imageSize(volume_output);
+    if (any(greaterThanEqual(cell, size))) return;
+    const ivec3 offsets[8] = ivec3[8](
+        ivec3(1,1,1), ivec3(-1,1,1), ivec3(1,-1,1), ivec3(-1,-1,1),
+        ivec3(1,1,-1), ivec3(-1,1,-1), ivec3(1,-1,-1), ivec3(-1,-1,-1));
+    precise vec4 value = vec4(0.0);
+    for (int tap=0; tap<8; ++tap) {
+        value += source_half_voxel_sample(cell, offsets[tap], size-ivec3(1));
+    }
+    imageStore(volume_output, cell, value * 0.125);
+}
