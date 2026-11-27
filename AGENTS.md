@@ -53,3 +53,16 @@
 游仙漂移最新定位：stage-v2的66/66对最早在POST_OPAQUE变化，完整UBO/深度/折射累积相同，真实TIME=63.89590835571289。全部关闭阴影仍变；275材质unshaded四帧一致、恢复又变；LF四组各6/6对仍变，全LF关闭最大HDR差3.267333984375。LF运行48完整UBO/48depth/16accum分别exact，TIME=55.849998474121094、TAA/jitter0。只定位到受光相关路径，未确定根因；不把关灯/关LF/unshaded当修复，不放宽exact。LF原参数恢复检查通过但无逐材质GPU uniform回读，Scene UBO相同也不代表light/cluster/shadow输入相同。
 
 主相机caster候选绑定Wind130、AmbientLitFixedY34、Hero1，unsupported0，保留fragment/discard及原材质恢复。wuming-v2近级4个阴影查询重复失败；v3加入同步UBO观察后两级各四次重复通过，可能改变时序，不证明v2根因已解。v3真TIME=94.98445892333984、TAA/jitter0；主视图完整UBO稳定，probe仅byte2660变化，不误记全probe字节一致。候选已入独立工程但默认未启用。游仙v1完成208绑定（Wind133/Ambient74/Hero1），unsupported0，两级各四次重复及baseline/disabled/postprobe exact；最终restore有7channel最大2/255差异，整套fail，状态恢复通过、owner.remaining0。先停probe再restore绑定、最后关闭renderer。下一步按变化像素/世界坐标定位受光实际输入并核实观察器/恢复画面，再推进实时双级和局部灯；水底行 CPU 算术模型差异保留，不先验认定生产缺陷或阻塞独立定位。详见`docs/TLV_SUN_PROGRESS_20261126.md`及`workbench/reports/{tlv-shadow-20261126,tlv-drift-20261126,tlv-caster-20261126,water-clock-20261126}/`；旧失败全部保留。
+
+
+2026-11-27地形专项：`landscape-drift-20261127/gpu-v1` 唯一定位原游仙地形的受光路径；原态/恢复各6/6对最早POST_OPAQUE漂移，union116/20px、最大HDR差0.0697021484375/0.00390625，仅该地形临时unshaded的四帧所有HDR/PNG exact。370材质含目标70uniform前后快照字节完全一致，但不是GPU内部输入回读，也不是生产修复。36上游完整UBO、12折射完整UBO分别exact；两阶段恒定byte2700值15/7，不写48份全同。TIME18.11944580078125、TAA/jitter0，36depth/12accum跨条件exact，综合冻结仍false。
+
+同日独立权重A/B已证明`process/fix_alpha_border=true`改写八层数据纹理：无名/游仙1–4各19747/7257像素，5–8无变化；仅设false后四份导入RGBA均与源exact。生产四份`.import`已设false并重导入5.844秒exit0/错误警告0，PNG保持。生产验证4.734秒exit0，四份RGBA与源全字节一致；实际脚步选材278902+159580=438482次、误差0；旧导入全零权重点345/322归零，物理材质差异2018/1488、音组差异245/45。独立CPU复核全部计数与源权重期望一致，并核对四份旧baseline真实SHA与修改前manifest/run-v1，补齐本次基线来源；无声音播放或桥木行走验收。
+
+验证器v2随后将四份baseline预存SHA纳入启动/结束快照并在实际读入再次严格核对。production-verify-v2正例6.312秒exit0、438482次选材通过；verifier-negative-v2等长改1字节负例0.672秒exit1，在地图统计前以baseline SHA mismatch拒绝，输入前后保持，两个run均错误/警告0。不能把v1只检查长度的局限继续当成当前工具行为；v1外部复核历史保留。
+
+修正后capture-run-v1为99.860秒exit0/错误警告0，两图各六面重复raw、baseline重复、捕获前后主画面exact，状态/时钟恢复通过。integrated-v1两图SH9输入SHA与本次捕获一致，三项CPU投影测试通过。独立复核233+169项全通过，已归档`landscape-weights-20261127/cpu-production-review-v1`。compare-run-v1为122.656秒exit0，两图共四机位分别替换漫反射/反射再恢复，恢复画面exact，434/301shader材质恢复通过；四份SH9/cube资源已备份、部署、SHA核验。house-run-v1为171.469秒exit0，两图各五阶段实际set_inside及室内退出清理通过，不等于门口导航验证。两个default新画面人工未见明显缺材/破面，不是美术验收。
+
+更新后的`post-weight-refresh-cpu-v1`证据true但整体false：原态/恢复最早POST_OPAQUE各6/6对漂移，union82/54px、最大HDR差0.032958984375/0.0184326171875；仅地形unshaded全阶段和PNG exact，材质恢复及36/12份UBO分组保持。权重数据修正后漂移仍在，不能把不同run的像素数减少当因果改善。
+
+`specular-v1`正式wrapper实跑88.469秒exit0，引擎错误0/输入保持；唯一原地形最终shader只加false关闭直接镜面条件，独立diff一行。原/关镜面/恢复POST_OPAQUE分别5/6、6/6、6/6对漂移，union11/22/87px、最大HDR差0.0048828125/0.13427734375/0.050048828125；370材质/70uniform恢复、UBO分组、depth/accum保持，证据true但整体false。单独关镜面不足以消除漂移，不部署该关断；源DXBC的Fresnel缺口另为待测候选，不能当漂移修复。下一步继续局部cone/受光输入。四份小设置白名单提交，PNG/GLB/ctex和大报告不入Git。详见`docs/LANDSCAPE_PROGRESS_20261127.md`；旧失败全部保留，不宣称完整复原。

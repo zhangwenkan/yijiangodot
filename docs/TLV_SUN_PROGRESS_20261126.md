@@ -66,7 +66,7 @@ v3 的 40 份主视图/probe 完整缓冲按正确布局重解：TIME=94.9844589
 
 新增 `youxian-v1` 运行 79.812 秒、无引擎错误，完成 208 项绑定（Wind 133、AmbientLitFixedY 74、Hero 1），unsupported=0。两级各四次启用采样重复逐位一致；baseline 重复、禁用和 probe 后禁用图像也一致。最终恢复仍有 7 个通道不同、最大 2/255，故引擎诊断/CPU/整套均为失败。材质、几何参数恢复检查通过、owner.remaining=0，不能把状态恢复与最终画面完全一致混为一谈，也不能据此将变化直接归因于绑定。
 
-2026-11-27 独立 CPU 复查：恢复差异为 5 像素/7 通道，范围 x468–477、y106–114，位于石碑右侧远处植被边缘。五点均落在旧 all-LF-off 漂移区域，但运行时间、材质状态和相机高度略有不同，仅屏幕位置重合不足以证明同因。40 份完整 UBO 按各 cascade/view 分组稳定，真实 TIME=57.95665740966797；不同视图的缓冲不能合称为一份相同数据。状态恢复依赖运行时断言，未保存全部 post-restore 参数快照供 CPU 独立重放。复查保存在 `workbench/reports/tlv-caster-20261126/youxian-v1-cpu-review/`。
+2026-11-27 独立 CPU 复查：恢复差异为 5 像素/7 通道，范围 x468–477、y106–114。后续逐点定位纠正了“均落在旧 all-LF-off 漂移区域”的描述：这 5 个最终 PNG 坐标没有直接命中旧 all-LF-off 的 42 个 POST_OPAQUE 变化坐标。它们来自不同运行及阶段，时间、材质状态和相机高度也略有不同；不能仅凭附近看似植被的屏幕区域判定实际树叶材质或相同成因。40 份完整 UBO 按各 cascade/view 分组稳定，真实 TIME=57.95665740966797；不同视图的缓冲不能合称为一份相同数据。状态恢复依赖运行时断言，未保存全部 post-restore 参数快照供 CPU 独立重放。原复查保存在 `workbench/reports/tlv-caster-20261126/youxian-v1-cpu-review/`，后续坐标核对见 `workbench/reports/landscape-drift-20261127/lighting-input-audit-v2/`；7 通道恢复失败结论保持。
 
 ## 复跑
 
@@ -91,7 +91,7 @@ python tools/verification/run_source_tlv_drift.py --direct-youxian --out workben
 python tools/verification/drift/analyze_upstream_drift.py --run workbench/reports/drift-new-stage --out workbench/reports/drift-new-cpu
 ```
 
-漂移运行器的 `capture_passed` 只表示采集完成；冻结相等性必须另看 CPU 分析。`--shadow-controls`、`--unshaded-controls`、`--lf-controls` 互斥，仅按新假设选用。入仓版漂移 wrapper 完成静态及命令行检查，未再次运行 GPU；既有 GPU 证据来自同内容诊断脚本的暂存入口，不能冒称 wrapper 已实测。水时钟复跑见 `WATER_CLOCK_PROGRESS_20261126.md`。
+漂移运行器的 `capture_passed` 只表示采集完成；冻结相等性必须另看 CPU 分析。`--shadow-controls`、`--unshaded-controls`、`--lf-controls` 及新增 landscape 控制选项互斥，仅按新假设选用。旧模式入仓时只完成 wrapper 静态/命令行检查，其既有 GPU 证据来自同内容诊断脚本的暂存入口，保留这一历史边界。2026-11-27 新增的 `--landscape-controls` 和 `--landscape-specular-controls` 已通过正式 wrapper 实际运行 GPU，不能再笼统描述为 wrapper 未实测；证据与仍未解决的漂移见 `LANDSCAPE_PROGRESS_20261127.md`。水时钟复跑见 `WATER_CLOCK_PROGRESS_20261126.md`。
 
 ## 未完成的内容
 

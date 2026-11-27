@@ -1,7 +1,180 @@
 extends "res://scripts/verification/verify_source_tlv_receiver.gd"
-## Read-only scene diagnostic. Each distortion triplet is captured in one callback.
+## Temporary scene controls only; never write production source or assets.
+## Each distortion triplet is captured in one callback.
 var stage_effects: Array[CompositorEffect] = []
 var stage_names := ["post-opaque","before-atmosphere","after-atmosphere"]
+
+func landscape_value_snapshot(value: Variant) -> Variant:
+	return value.duplicate(true) if value is Array or value is Dictionary else value
+
+func landscape_value_record(value: Variant) -> Dictionary:
+	if value is Resource:
+		return {"variant_type":type_string(typeof(value)),"resource_class":value.get_class(),
+			"resource_path":value.resource_path,"instance_id":value.get_instance_id()}
+	return {"variant_type":type_string(typeof(value)),"value":var_to_str(value)}
+
+func landscape_collect_material(material: Material, node_path: String, slot: String, states: Dictionary) -> void:
+	if material == null: return
+	var id: int = material.get_instance_id()
+	var use := {"node":node_path,"slot":slot}
+	if states.has(id):
+		if not states[id].uses.has(use): states[id].uses.append(use)
+		return
+	var state := {"material":material,"uses":[use],"next_pass":material.next_pass,
+		"render_priority":material.render_priority,"resource_name":material.resource_name,
+		"resource_path":material.resource_path,"shader":null,"shader_sha256":"","parameters":{},"properties":{}}
+	if material is ShaderMaterial and material.shader != null:
+		state.shader = material.shader
+		state.shader_sha256 = material.shader.code.sha256_text()
+		for uniform in material.shader.get_shader_uniform_list():
+			state.parameters[uniform.name] = landscape_value_snapshot(material.get_shader_parameter(uniform.name))
+	else:
+		# Retain other material classes too; all exposed stored properties stay unchanged.
+		for property in material.get_property_list():
+			if (int(property.usage) & PROPERTY_USAGE_STORAGE)!=0:
+				state.properties[property.name] = landscape_value_snapshot(material.get(property.name))
+	states[id] = state
+	landscape_collect_material(material.next_pass,node_path,slot+"/next_pass",states)
+
+func landscape_snapshot_materials() -> Dictionary:
+	var states: Dictionary = {}
+	for node in scene.find_children("*","GeometryInstance3D",true,false):
+		var path := str(node.get_path())
+		landscape_collect_material(node.material_override,path,"override",states)
+		landscape_collect_material(node.material_overlay,path,"overlay",states)
+		if node is MeshInstance3D and node.mesh != null:
+			for i in node.mesh.get_surface_count():
+				landscape_collect_material(node.get_surface_override_material(i),path,"surface_override/%d" % i,states)
+				landscape_collect_material(node.mesh.surface_get_material(i),path,"mesh_surface/%d" % i,states)
+		elif node is MultiMeshInstance3D and node.multimesh != null and node.multimesh.mesh != null:
+			for i in node.multimesh.mesh.get_surface_count():
+				landscape_collect_material(node.multimesh.mesh.surface_get_material(i),path,"multimesh_surface/%d" % i,states)
+	return states
+
+func landscape_material_records(states: Dictionary) -> Array[Dictionary]:
+	var records: Array[Dictionary] = []
+	for id in states:
+		var state: Dictionary = states[id]
+		var parameters: Dictionary = {}
+		var properties: Dictionary = {}
+		for key in state.parameters: parameters[key] = landscape_value_record(state.parameters[key])
+		for key in state.properties: properties[key] = landscape_value_record(state.properties[key])
+		records.append({"material_id":id,"class":state.material.get_class(),"resource_name":state.resource_name,
+			"resource_path":state.resource_path,"uses":state.uses,"shader_sha256":state.shader_sha256,
+			"shader_instance_id":state.shader.get_instance_id() if state.shader != null else 0,
+			"shader_resource_path":state.shader.resource_path if state.shader != null else "",
+			"next_pass":landscape_value_record(state.next_pass),"render_priority":state.render_priority,
+			"parameters":parameters,"stored_properties":properties})
+	return records
+
+func landscape_verify_materials(states: Dictionary, target_id: int, installed: Shader, label: String) -> bool:
+	var start: int = report.failures.size()
+	var current := landscape_snapshot_materials()
+	check(current.size()==states.size(),label+": referenced material count changed")
+	for id in states:
+		var state: Dictionary = states[id]
+		if not current.has(id): check(false,label+": material no longer referenced "+str(id)); continue
+		var material: Material = state.material
+		check(current[id].uses==state.uses,label+": geometry material references changed "+str(id))
+		check(material.next_pass==state.next_pass and material.render_priority==state.render_priority,label+": material pass/priority changed "+str(id))
+		check(material.resource_name==state.resource_name and material.resource_path==state.resource_path,label+": material identity changed "+str(id))
+		if material is ShaderMaterial:
+			var expected: Shader = installed if id==target_id and installed!=null else state.shader
+			check(material.shader==expected,label+": shader owner changed "+str(id))
+			var expected_hash: String = report.landscape_control.installed_shader_sha256 if id==target_id and installed!=null else state.shader_sha256
+			check((material.shader.code.sha256_text() if material.shader!=null else "")==expected_hash,label+": shader source changed "+str(id))
+			check(current[id].parameters.size()==state.parameters.size(),label+": uniform count changed "+str(id))
+			for key in state.parameters:
+				check(material.get_shader_parameter(key)==state.parameters[key],label+": uniform changed "+str(id)+" / "+str(key))
+		else:
+			for key in state.properties:
+				check(material.get(key)==state.properties[key],label+": stored material property changed "+str(id)+" / "+str(key))
+	var passed: bool = report.failures.size()==start
+	report.landscape_control.state_checks.append({"label":label,"passed":passed,"material_count":states.size(),"target_material_id":target_id,
+		"target_control_active":installed!=null,"target_unshaded":installed!=null and report.landscape_control.control_variant=="unshaded","scope":"CPU-visible scene geometry references, material shaders/parameters and stored non-ShaderMaterial properties; not GPU uniform readback."})
+	return passed
+
+func run_landscape_controls(disable_direct_specular: bool=false) -> void:
+	var condition := "landscape-no-direct-specular" if disable_direct_specular else "landscape-unshaded"
+	report.landscape_control = {"scope":"One original Youxian landscape receives a temporary shader control; diagnosis, not a rendering fix or source UE equivalence.",
+		"control_variant":"no-direct-specular" if disable_direct_specular else "unshaded",
+		"expected_node":"OriginalLandscape_youxian","expected_material":"OriginalLandscape_Compiled_youxian",
+		"state_checks":[],"identification":[],"source_shader_preserved_except_render_mode":false}
+	var candidates: Array[MeshInstance3D] = []
+	for node in scene.world.find_children("*","MeshInstance3D",true,false):
+		if str(node.name)!="OriginalLandscape_youxian": continue
+		var material: Material = node.material_override
+		var matches: bool = node.get_meta("original_landscape",false)==true and str(node.get_meta("map_slug",""))=="youxian"
+		matches = matches and material is ShaderMaterial and material.shader!=null
+		if matches:
+			matches = material.resource_name=="OriginalLandscape_Compiled_youxian" and material.get_meta("source_landscape_compiled",false)==true and str(material.get_meta("source_surface_family",""))=="M_TFK_Dipi01"
+		report.landscape_control.identification.append({"node":str(node.get_path()),"node_id":node.get_instance_id(),
+			"original_landscape":node.get_meta("original_landscape",false),"map_slug":node.get_meta("map_slug",""),
+			"source_component_count":node.get_meta("source_component_count",-1),"matched":matches,
+			"material_id":material.get_instance_id() if material!=null else 0,"material_resource_name":material.resource_name if material!=null else ""})
+		if matches: candidates.append(node)
+	check(scene.slug=="youxian" and candidates.size()==1,"Landscape control requires exactly one identified original Youxian landscape")
+	if scene.slug!="youxian" or candidates.size()!=1: return
+	var target: ShaderMaterial = candidates[0].material_override
+	var target_id: int = target.get_instance_id()
+	var states := landscape_snapshot_materials()
+	if not states.has(target_id): check(false,"Identified landscape material missing from snapshot"); return
+	var target_state: Dictionary = states[target_id]
+	var single_override: bool = target_state.uses.size()==1 and target_state.uses[0].node==str(candidates[0].get_path()) and target_state.uses[0].slot=="override"
+	check(single_override,"Landscape material is shared outside its single original override")
+	if not single_override: return
+	var code: String = target_state.shader.code
+	var render_mode := RegEx.new()
+	render_mode.compile("(?m)^render_mode\\s+[^;]+;")
+	var render_matches := render_mode.search_all(code)
+	check(render_matches.size()==1,"Landscape runtime shader must have exactly one render_mode declaration")
+	if render_matches.size()!=1: return
+	var unshaded := RegEx.new()
+	unshaded.compile("\\bunshaded\\b")
+	if unshaded.search(render_matches[0].get_string())!=null: check(false,"Landscape was already unshaded before control"); return
+	var at: int = render_matches[0].get_end()-1
+	var installed := Shader.new()
+	if disable_direct_specular:
+		# The source renderer expands the receiving include before this snapshot.
+		# Reject any unexpected shader instead of editing a shared source/include.
+		var guard := "if (nl > 0.0 && ROUGHNESS > 0.0) {"
+		var disabled_guard := "if (false && nl > 0.0 && ROUGHNESS > 0.0) {"
+		var addition := "SPECULAR_LIGHT += radiance * distribution * visibility * fresnel * nl * SPECULAR_AMOUNT;"
+		check(code.count(guard)==1 and code.count(addition)==1,"Landscape direct-specular guard/addition must occur exactly once in expanded runtime shader")
+		if code.count(guard)!=1 or code.count(addition)!=1: return
+		installed.code = code.replace(guard,disabled_guard)
+		report.landscape_control.source_shader_preserved_except_specular_guard = installed.code.replace(disabled_guard,guard)==code
+		report.landscape_control.specular_guard_original = guard
+		report.landscape_control.specular_guard_installed = disabled_guard
+	else:
+		installed.code = code.insert(at,", unshaded")
+		report.landscape_control.source_shader_preserved_except_render_mode = installed.code.substr(0,at)+installed.code.substr(at+", unshaded".length())==code
+	report.landscape_control.original_shader_sha256 = code.sha256_text()
+	report.landscape_control.installed_shader_sha256 = installed.code.sha256_text()
+	report.landscape_control.target_material_id = target_id
+	report.landscape_control.material_count = states.size()
+	report.landscape_control.other_material_count = states.size()-1
+	FileAccess.open(out.path_join("landscape-materials-before.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(states),"\t"))
+	FileAccess.open(out.path_join("landscape-runtime-original.gdshader"),FileAccess.WRITE).store_string(code)
+	FileAccess.open(out.path_join("landscape-runtime-"+str(report.landscape_control.control_variant)+".gdshader"),FileAccess.WRITE).store_string(installed.code)
+	for i in 4: await save_distortion("original-%02d" % i)
+	if not landscape_verify_materials(states,target_id,null,"after-original"): return
+	target.shader = installed
+	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+	await settle(20)
+	landscape_verify_materials(states,target_id,installed,"before-"+condition)
+	for i in 4: await save_distortion(condition+"-%02d" % i)
+	landscape_verify_materials(states,target_id,installed,"after-"+condition)
+	# Never overwrite a competing shader owner during diagnostic cleanup.
+	if target.shader!=installed or target_state.shader.code.sha256_text()!=code.sha256_text():
+		check(false,"Landscape shader owner/source changed before restore"); return
+	target.shader = target_state.shader
+	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+	await settle(20)
+	landscape_verify_materials(states,target_id,null,"before-restored")
+	for i in 4: await save_distortion("restored-%02d" % i)
+	landscape_verify_materials(states,target_id,null,"after-restored")
+	FileAccess.open(out.path_join("landscape-materials-restored.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(landscape_snapshot_materials()),"\t"))
 
 func snapshot_light_function_uniforms() -> Array[Dictionary]:
 	var saved: Array[Dictionary] = []
@@ -70,6 +243,11 @@ func save_distortion(label: String) -> void:
 	check(not data.is_empty(),label+": missing distortion readback")
 	check(stages.all(func(d): return not d.is_empty()),label+": missing upstream readback")
 	if data.is_empty(): return
+	if ("--drift-landscape-controls" in OS.get_cmdline_user_args() or "--drift-landscape-specular-controls" in OS.get_cmdline_user_args()) and stages.all(func(d): return not d.is_empty()):
+		for stage in stages:
+			check(stage.get("token",-1)==report.captures.size(),label+": upstream token mismatch")
+			check(stage.get("drawn_frame",-1)==stages[0].get("drawn_frame",-2),label+": upstream stages differ in drawn frame")
+			check(stage.get("callback_serial",-1)==stages[0].get("callback_serial",-2),label+": upstream stages differ in callback serial")
 	var folder := out.path_join(label)
 	DirAccess.make_dir_recursive_absolute(folder)
 	for j in stages.size():
@@ -106,6 +284,14 @@ func run() -> void:
 	if out.is_empty(): quit(2); return
 	DirAccess.make_dir_recursive_absolute(out)
 	report = {"maps":[],"captures":[],"failures":[],"scope":"Youxian default frozen distortion stage localization; no production changes; final PNG is a later frame than the same-callback HDR triplet."}
+	var control_count := 0
+	for flag in ["--drift-lf-controls","--drift-unshaded-controls","--drift-shadow-controls","--drift-landscape-controls","--drift-landscape-specular-controls"]:
+		if flag in OS.get_cmdline_user_args(): control_count += 1
+	if control_count>1:
+		check(false,"Drift control modes are mutually exclusive")
+		progress("rejected")
+		quit(2)
+		return
 	root.size = Vector2i(960,540)
 	scene = load("res://worlds.tscn").instantiate()
 	root.add_child(scene)
@@ -136,7 +322,9 @@ func run() -> void:
 	effects.append(stage_effects[2])
 	diagnostic_compositor.compositor_effects = effects
 	scene.camera.compositor = diagnostic_compositor
-	if "--drift-lf-controls" in OS.get_cmdline_user_args():
+	if "--drift-landscape-controls" in OS.get_cmdline_user_args() or "--drift-landscape-specular-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("--drift-landscape-specular-controls" in OS.get_cmdline_user_args())
+	elif "--drift-lf-controls" in OS.get_cmdline_user_args():
 		var materials := snapshot_light_function_uniforms()
 		report.lf_materials = materials.size()
 		for mode in ["original","sun-lf-off","all-lf-off","restored"]:
