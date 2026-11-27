@@ -48,8 +48,18 @@ def stage_drift(run,out):
         clock=(folder/stage['scene_time_ubo']['file']).read_bytes()
         timebytes[name]=clock
         parameters[name]=dof['parameters_f32']
-        meta[name]={'scene_shader_time_reported':stage.get('scene_shader_time'),
-            'scene_ubo_f32':np.frombuffer(clock,dtype='<f4').tolist(),'scene_ubo_hex':clock.hex(),
+        full_ref=stage.get('scene_ubo_full',{})
+        full_path=folder/full_ref.get('file','__missing_full_scene_ubo__')
+        full=full_path.read_bytes() if full_path.is_file() else b''
+        verified=(len(full)==5696 and stage.get('scene_time_offset')==2816
+            and stage.get('scene_ubo_layout')=='godot-4.7.2-float-2848x2'
+            and clock==full[2816:2832]
+            and bool(np.isfinite(np.frombuffer(full[2816:2832],dtype='<f4')).all()))
+        meta[name]={'scene_shader_time_reported_legacy_untrusted':stage.get('scene_shader_time'),
+            'scene_clock_layout_verified':verified,
+            'scene_shader_time_verified':float(np.frombuffer(full[2816:2820],dtype='<f4')[0]) if verified else None,
+            'scene_taa_frame_count_verified':float(np.frombuffer(full[2820:2824],dtype='<f4')[0]) if verified else None,
+            'captured_slice_f32_not_necessarily_clock':np.frombuffer(clock,dtype='<f4').tolist(),'captured_slice_hex':clock.hex(),
             'particles':stage.get('particles'),'groups':stage.get('groups'),'dof_frame':dof.get('frame'),
             'dof_capture_sha256':sha(folder/'dof/samples.rgba32f')}
     pairs=[]
@@ -70,7 +80,9 @@ def stage_drift(run,out):
             row['earliest_recorded_change']=next((p for p in order if not row['fields'][p]['exact_equal']),None)
             pairs.append(row)
     result={'available':True,'metadata':meta,'pairs':pairs,
-        'scene_ubo_exact_across_stages':len(set(timebytes.values()))==1,
+        'captured_scene_slice_exact_across_stages':len(set(timebytes.values()))==1,
+        'scene_clock_frozen':len(set(timebytes.values()))==1 if all(m['scene_clock_layout_verified'] for m in meta.values()) else None,
+        'clock_evidence_limit':'Legacy 16-byte captures beginning at byte 2832 contain exposure/layers/alpha, not time. Their equality does not validate a frozen scene clock.',
         'dof_parameters_exact_across_stages':all(parameters[n]==parameters[names[0]] for n in names),
         'same_render_frame_correlation_proven':False,
         'correlation_limit':'DOF async and separate capture requests are queued together but saved data lacks a shared frame ID; final PNG is taken after async completion. Compare same-stage snapshots, not cross-stage bytes as if one frame.',
@@ -83,7 +95,7 @@ def analyze(run,out,diagnostic_only=False):
     out.mkdir(parents=True,exist_ok=True)
     if diagnostic_only:
         result=stage_drift(run,out/'stage-drift')
-        print(json.dumps({'available':result.get('available'),'time_frozen':result.get('scene_ubo_exact_across_stages'),
+        print(json.dumps({'available':result.get('available'),'time_frozen':result.get('scene_clock_frozen'),
             'pairs':[{'first':p['first'],'second':p['second'],'earliest':p['earliest_recorded_change'],
                 'changed':{k:v['changed_components'] for k,v in p['fields'].items()}} for p in result.get('pairs',[])]},indent=2))
         return result

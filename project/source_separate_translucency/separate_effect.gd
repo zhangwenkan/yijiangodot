@@ -312,11 +312,16 @@ func _render_callback(kind: int, render_data: RenderData) -> void:
 	report.size=[size.x,size.y]
 	if capture:
 		var result := {"width":size.x,"height":size.y,"particles":particles,"groups":prepared.size(),"before_rgba16f":_rd.texture_get_data(_capture_before,0),"layer_rgba16f":_rd.texture_get_data(_layer,0),"after_rgba16f":_rd.texture_get_data(_capture_after,0)}
-		# Diagnostic only: the installed 4.7.2 SceneData time field is at byte2832,
-		# as also used by the existing source-water distortion verifier.
-		var scene_clock := _rd.buffer_get_data(scene.get_uniform_buffer(),2832,16)
+		# Diagnostic only: preserve full data and require the verified 4.7.2 float layout.
+		var scene_ubo_full: PackedByteArray = _rd.buffer_get_data(scene.get_uniform_buffer())
+		var scene_clock: PackedByteArray = scene_ubo_full.slice(2816,2832) if scene_ubo_full.size()==5696 else PackedByteArray()
+		result.scene_ubo_full=scene_ubo_full
+		result.scene_ubo_size=scene_ubo_full.size()
+		result.scene_time_offset=2816
+		result.scene_ubo_layout="godot-4.7.2-float-2848x2" if scene_ubo_full.size()==5696 else "unsupported"
 		result.scene_time_ubo=scene_clock
-		result.scene_shader_time=scene_clock.decode_float(0) if scene_clock.size()>=4 else -1.0
+		result.scene_shader_time=scene_clock.decode_float(0) if scene_clock.size()==16 else -1.0
+		result.scene_taa_frame_count=scene_clock.decode_float(4) if scene_clock.size()==16 else -1.0
 		_lock.lock()
 		_capture=result
 		_lock.unlock()

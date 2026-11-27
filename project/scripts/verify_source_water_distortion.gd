@@ -55,13 +55,47 @@ func readback(effect: CompositorEffect, label: String) -> Dictionary:
 	metadata["nonzero_accumulation_pixels"]=nonzero
 	metadata["max_encoded_channel"]=channel_max
 	var clock_bytes: PackedByteArray=capture.get("scene_time_ubo",PackedByteArray())
-	if clock_bytes.size()==16:
+	var full_ubo: PackedByteArray=capture.get("scene_ubo_full",PackedByteArray())
+	var clock_valid: bool=full_ubo.size()==5696 and clock_bytes.size()==16 and capture.get("scene_time_offset",-1)==2816 and capture.get("scene_ubo_layout","")=="godot-4.7.2-float-2848x2"
+	if clock_valid:
+		clock_valid=clock_bytes==full_ubo.slice(2816,2832)
+	metadata["scene_clock_layout_verified"]=clock_valid
+	if clock_valid:
 		metadata["scene_shader_time"]=clock_bytes.decode_float(0)
-		check(is_finite(float(metadata.scene_shader_time)),"Nonfinite exact scene TIME "+label)
-	else: check(false,"Missing scene TIME UBO capture "+label)
+		metadata["scene_taa_frame_count"]=clock_bytes.decode_float(4)
+		check(is_finite(float(metadata.scene_shader_time)),"Nonfinite verified scene TIME "+label)
+	else: check(false,"Missing or unsupported scene TIME UBO layout "+label)
 	FileAccess.open(directory.path_join("capture.json"),FileAccess.WRITE).store_string(JSON.stringify(metadata,"\t"))
 	check(capture.get("water_uniform_set_valid",false),"Invalid water uniform set "+label)
-	return {"nonzero_pixels":nonzero,"max_channel":channel_max,"scene_shader_time":metadata.get("scene_shader_time"),"particle_count":capture.particle_count,"water_active":capture.water_active}
+	return {"nonzero_pixels":nonzero,"max_channel":channel_max,"scene_shader_time":metadata.get("scene_shader_time"),
+		"scene_taa_frame_count":metadata.get("scene_taa_frame_count"),"scene_clock_layout_verified":clock_valid,
+		"water_frame_sha256":byte_hash(capture.get("water_frame_rgba32f",PackedByteArray())),
+		"accumulation_file":directory.path_join("accumulation_rgba8.bin"),"capture_file":directory.path_join("capture.json"),
+		"particle_count":capture.particle_count,"water_active":capture.water_active}
+func byte_hash(bytes: PackedByteArray) -> String:
+	var hash:=HashingContext.new()
+	hash.start(HashingContext.HASH_SHA256)
+	if not bytes.is_empty(): hash.update(bytes)
+	return hash.finish().hex_encode()
+func verify_shared_water_clock(binding: Node) -> Dictionary:
+	var material: ShaderMaterial=binding.draw.material_override
+	var code: String=material.shader.code
+	var expected: Array[String]=["TIME*surge_speed","TIME*wave_normal_speed*vec2(-0.5,0.8)","TIME*wave_normal_speed*vec2(0.4,-0.6)",
+		"TIME*ocean_normal_speed*vec2(-0.5,1.2)","TIME*ocean_normal_speed*vec2(0.9,-0.6)","TIME*ocean_normal_speed*vec2(-1.2,0.2)","TIME*ocean_normal_speed*vec2(0.8,0.2)"]
+	var missing: Array[String]=[]
+	for token in expected:
+		if not code.contains(token): missing.append(token)
+	check(missing.is_empty(),"Actual main water shader time expressions changed")
+	var pass_files: Dictionary={}
+	for stage_name in ["vert","frag"]:
+		var path: String="res://source_water_distortion_candidate/water_accumulate."+stage_name+".glsl.txt"
+		var shader_source: String=FileAccess.get_file_as_string(path)
+		var correct: bool=shader_source.contains("vec4 preceding[176]; vec4 time_taa;") and shader_source.contains("float t=clock_data.time_taa.x;") and not shader_source.contains("preceding[177]")
+		check(correct,"Water distortion source clock contract changed "+stage_name)
+		pass_files[stage_name]={"sha256":shader_source.sha256_text(),"clock_offset_verified":correct}
+	return {"main_shader_sha256":code.sha256_text(),"main_shader_missing_time_expressions":missing,"distortion_shaders":pass_files,
+		"shared_input":"The main Forward+ material TIME maps to scene_data_block.data.time; both distortion shaders bind this same main-view Scene UBO at binding 8 and read byte 2816.",
+		"scope":"Source binding plus actual GPU-input capture; not independent native-UE frame parity."}
 func run() -> void:
 	if out.is_empty(): quit(2);return
 	DirAccess.make_dir_recursive_absolute(out)
@@ -108,7 +142,42 @@ func run() -> void:
 		check(state(binding)==before,"Water source geometry/material/transform changed "+slug)
 		row["source_unchanged"]=state(binding)==before
 		row["restored_pixels_equal"]=baseline.get_data()==restored.get_data()
+		# Keep CPU owners disabled: only the actual engine shader clock advances.
+		var dynamic_failure_start: int=report.failures.size()
+		row["main_water_clock_source"]=verify_shared_water_clock(binding)
 		binding.set_active(true)
+		effect.submit_source_instances(PackedFloat32Array(),0)
+		Engine.time_scale=1.0
+		await settle(60)
+		Engine.time_scale=0.0
+		await settle(8)
+		row["water_only_later"]=await readback(effect,slug+"-water-only-later")
+		var first: Dictionary=row.water_only
+		var later: Dictionary=row.water_only_later
+		var first_time: float=float(first.scene_shader_time) if first.get("scene_clock_layout_verified",false) else -1.0
+		var later_time: float=float(later.scene_shader_time) if later.get("scene_clock_layout_verified",false) else -1.0
+		var time_valid: bool=first.get("scene_clock_layout_verified",false) and later.get("scene_clock_layout_verified",false) and is_finite(first_time) and is_finite(later_time) and later_time>first_time
+		check(time_valid,"Real main-view scene TIME did not advance with verified layout "+slug)
+		check(first.get("particle_count",-1)==0 and later.get("particle_count",-1)==0,"Water-only capture contains particle distortion "+slug)
+		check(first.get("water_active",false) and later.get("water_active",false),"Water-only capture was inactive "+slug)
+		check(scene.process_mode==Node.PROCESS_MODE_DISABLED,"CPU scene advanced during water clock test "+slug)
+		check(first.get("water_frame_sha256","")==later.get("water_frame_sha256",""),"Water frame/camera/parameters changed during clock-only advance "+slug)
+		check(state(binding)==before,"Water source changed during clock-only advance "+slug)
+		var first_bytes: PackedByteArray=FileAccess.get_file_as_bytes(first.get("accumulation_file",""))
+		var later_bytes: PackedByteArray=FileAccess.get_file_as_bytes(later.get("accumulation_file",""))
+		var changed_bytes: int=0
+		if first_bytes.size()==later_bytes.size() and not first_bytes.is_empty():
+			for byte_index in first_bytes.size():
+				if first_bytes[byte_index]!=later_bytes[byte_index]: changed_bytes+=1
+		else: check(false,"Missing or mismatched dual-time accumulation readback "+slug)
+		check(changed_bytes>0,"Water-only distortion accumulation did not change at later real TIME "+slug)
+		check(int(later.get("nonzero_pixels",0))>0,"Later water-only distortion contribution absent "+slug)
+		row["water_dynamic"]={"passed":report.failures.size()==dynamic_failure_start,"first_time":first_time,"later_time":later_time,
+			"elapsed_scene_time":later_time-first_time,"advance_process_frames":60,"cpu_scene_process_stayed_disabled":scene.process_mode==Node.PROCESS_MODE_DISABLED,
+			"scope":"Verified same main-view TIME input and dynamic response. Shader-driven opaque depth can also change; not isolated causality or original UE parity.",
+			"accumulation_changed_bytes":changed_bytes,"water_frame_exact":first.get("water_frame_sha256","")==later.get("water_frame_sha256","")}
+		await shot(slug+"-water-only-later")
+		effect.submit_source_instances(saved_snapshot.to_float32_array(),saved_count)
 		scene.process_mode=old_mode
 		Engine.time_scale=old_time
 		report.maps.append(row)

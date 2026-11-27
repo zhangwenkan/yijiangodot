@@ -16,7 +16,7 @@ layout(set=0,binding=4) uniform sampler2D water3;
 layout(set=0,binding=5) uniform sampler2D water2;
 layout(set=0,binding=6) uniform sampler2D water1;
 layout(set=0,binding=7) uniform sampler2D opaque_depth;
-layout(set=0,binding=8,std140) uniform SceneClock { vec4 preceding[177]; vec4 time_taa; } clock_data;
+layout(set=0,binding=8,std140) uniform SceneClock { vec4 preceding[176]; vec4 time_taa; } clock_data;
 vec3 unpack_bc5(vec2 raw) { vec2 xy=raw*2.0-1.0; return vec3(xy,sqrt(max(1.0-dot(xy,xy),0.0))); }
 vec2 source_uv(float scale) { return (uv-vec2(0.5))/max(scale,0.000001)+vec2(0.5); }
 vec3 depth_view(vec2 screen_uv) {

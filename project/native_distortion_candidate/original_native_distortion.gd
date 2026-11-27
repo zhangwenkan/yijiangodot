@@ -329,7 +329,13 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 		capture["water_active"] = has_water
 		capture["water_uniform_set_valid"] = water_set.is_valid()
 		capture["water_frame_rgba32f"] = water_pass.last_frame
-		capture["scene_time_ubo"] = _rd.buffer_get_data(scene.get_uniform_buffer(), 2832, 16) if has_water else PackedByteArray()
+		# Preserve the full verified-layout UBO so offline clock decoding is reproducible.
+		var scene_ubo_full: PackedByteArray = _rd.buffer_get_data(scene.get_uniform_buffer()) if has_water else PackedByteArray()
+		capture["scene_ubo_full"] = scene_ubo_full
+		capture["scene_ubo_size"] = scene_ubo_full.size()
+		capture["scene_time_offset"] = 2816
+		capture["scene_ubo_layout"] = "godot-4.7.2-float-2848x2" if scene_ubo_full.size()==5696 else "unsupported"
+		capture["scene_time_ubo"] = scene_ubo_full.slice(2816,2832) if scene_ubo_full.size()==5696 else PackedByteArray()
 		capture["before_rgba16f"] = _rd.texture_get_data(_scene_copy, 0)
 		capture["accumulation_rgba8"] = _rd.texture_get_data(_accumulation, 0)
 		capture["after_rgba16f"] = _rd.texture_get_data(_validation_output, 0)

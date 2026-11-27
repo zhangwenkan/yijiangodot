@@ -9,8 +9,8 @@ layout(set=0,binding=0,std140) uniform WaterFrame {
     vec4 p0; vec4 p1; vec4 p2; vec4 p3; vec4 p4; vec4 p5;
 } f;
 // Godot 4.7.2 float build RenderSceneDataRD::UBO; source TIME uses this same field.
-// 2832 byte offset proved from retained struct and MAX_RENDER_VIEWS=2.
-layout(set=0,binding=8,std140) uniform SceneClock { vec4 preceding[177]; vec4 time_taa; } clock_data;
+// Current time is byte 2816: verified non-double 5696-byte buffer, MAX_RENDER_VIEWS=2.
+layout(set=0,binding=8,std140) uniform SceneClock { vec4 preceding[176]; vec4 time_taa; } clock_data;
 layout(location=0) out vec2 uv;
 layout(location=1) out vec3 view_position;
 layout(location=2) out vec3 flat_view_normal;
