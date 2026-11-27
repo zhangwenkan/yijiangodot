@@ -158,3 +158,62 @@ python tools/verification/drift/analyze_landscape_raw_count.py --run workbench/r
 ```
 
 raw-count 的旧样本参数有意做严格跨run有效性审查，可能因可见表面改变而拒绝，不能为了出通过结果删掉失败坐标。本轮核心工具、小文档纳入Git，大报告、捕获原始缓冲及原资产继续仅本地保存。
+
+
+## 外部 GPU 捕获尝试与停止点（2026-11-27）
+
+为读取实际 cluster/light buffer，完成三次 RenderDoc 捕获尝试；三次均没有生成 RDC，未执行 replay，也未取得实际 GPU cluster/light buffer。这三次抓帧阶段的默认生产着色、几何和灯光未改。各次证据独立保留，不能把场景自身的 live compositor 捕获视为 RenderDoc 成功。
+
+| 尝试 | 实际结果 | 捕获及恢复边界 |
+|---|---|---|
+| `renderdoc-raw-count-v1` | wrapper 219.297 秒；注入和 TargetControl 连接成功，但未收到 Vulkan RegisterAPI，未触发捕获。Godot gate 90 秒超时后继续原诊断，controller 180 秒等待超时。 | 后续完成 12 次 live compositor 捕获；370 材质、70 参数及完整前后快照恢复通过，场景/compositor/process_mode/time_scale 恢复，输入源码 SHA 保持，引擎错误/警告 0。Godot 自然结束但因 gate failure 退出 1；整次捕获失败。 |
+| `renderdoc-raw-count-v2` | qrenderdoc 在 3.813 秒以 `0xC0000005` 崩溃，没有形成 controller 捕获结果、目标身份、Godot receiver/READY 或 RDC。 | wrapper 最后原子替换 `result.json.writing` 时遇到 WinError 5，旧 result 的 waiting 状态已陈旧。从保留的 `.writing` 只读恢复失败终态证据：`supervision_finished`、监督耗时 96.813 秒。没有改写历史结果；该恢复不代表捕获成功，也不据此确诊崩溃原因。 |
+| `renderdoc-raw-count-v3` | wrapper 43.297 秒；捕获环境仅传给目标 Godot，Vulkan RegisterAPI 已成功注册（supported=true、presenting=false），随后地图加载前出现 Vulkan device lost，Godot 以 `0xC0000005` 崩溃。 | 没有 READY、触发、RDC 或 receiver/材质前后快照，不能声称本次材质/状态恢复通过。输入源码 SHA 保持；`natural_process_completion=true` 仅表示非 wrapper 强杀，不表示正常运行成功。 |
+
+三次 `capture_passed=false`。v1 的 qrenderdoc 退出 0 不能替代捕获状态；v2 的旧 waiting 文件不能覆盖 `.writing` 中已完成的失败监督快照。v1/v3 的本地 runner、audit 和引擎记录分别在 `workbench/reports/landscape-drift-20261127/renderdoc-raw-count-v1/`、`renderdoc-raw-count-v3/`。v2 恢复证据为 `workbench/reports/landscape-drift-20261127/renderdoc-small-evidence-v1/renderdoc-v2-recovery-evidence-20261127/recovery-evidence.json`，其中保存原 result 和 `.writing` 的来源及哈希。
+
+另对 v1 gate 超时后取得的 **本次 live 运行自身**数据完成 CPU 独立复算：POST_OPAQUE raw-count 四帧变化并集 767 点，767/767 四帧 RGB 严格相等且乘 16 精确为 0–31 整数，未使用 epsilon、rounding 或排除像素。实际计数为 0–7、39 种四帧序列、最大计数变化 6，最大 raw HDR 差 0.375，6/6 对变化。36 份上游完整 UBO 和 12 份折射 UBO各自组内 exact，不能写成全部 48 份相同；36 份 depth exact。运行时材质/cluster 身份仍未证明（`identity_proven=false`）。审计为 `workbench/reports/landscape-drift-20261127/renderdoc-small-evidence-v1/renderdoc-v1-live-cpu-audit-20261127/summary.json` 及同目录 `audit.json`。
+
+上述 767 点属于新的失败捕获尝试之后的 live 观测，不是 RDC 帧，不证明 live/RDC 同帧，也不把整次 `overall_passed=false` 改为通过。此前 raw-count-v1 的 779 点/26 序列/0–8 和旧 906 坐标复用失败仍作为各自历史证据保留，不能混用运行或以本次数字覆盖。
+
+同类 GPU 抓帧在此暂停。捕获进程崩溃与 device lost 仅是本次外部捕获路径的失败事实，不能据此归因原场景冻结漂移或断言驱动缺陷。停止抓帧时，Fresnel 缺口尚在独立研究；其后限定地形的部署和验证见下一节，不将其视为漂移修复。TLV/caster 仍未默认启用，完整复原与美术验收均未完成。大报告及捕获数据仍只在本地保留。
+
+
+## 原地形 Fresnel 的有限源公式补齐（2026-11-27）
+
+RenderDoc 抓帧暂停后，独立完成了原地形 Fresnel 适用范围核对，并将限定修正部署到 `project/scripts/original_lightfunctions.gd` 和 `project/shaders/original_lightfunction_receiving.gdshaderinc` 两个生产文件。此前“生产着色未改”描述的是上节三次抓帧阶段；本节记录其后的有限变更，不能继续概括当前状态为完全未改着色。
+
+原字节证据覆盖当前复原采用的无名岛、游仙村两个代表地形编译实例，各 8 个六 MRT pixel shader，共 16/16 通过解压、fresh D3DDisassemble 与已保存 ASM/hash 核对。GBuffer 材质通道编译数据流对应 numeric model 1，支持只对这两图的 compiled landscape 补齐 `F90 = clamp(50 * F0.g, 0, 1)`；不是原版实机 RT/SRV 绑定或所有 permutation 的验证。源证据归档 `workbench/reports/landscape-drift-20261127/native-fresnel-scope-v1/`，其中“未实施”的建议是当时审计阶段记录。
+
+注入器仅对 `source_landscape_compiled=true` 材质在 include 前写入 `SOURCE_LF_NATIVE_F90`，并把宏状态纳入 shader 缓存键，避免同一源 shader 串用两个分支。非地形继续走原默认公式；没有把人物、鸟、落叶、水体或其它材质的原 shading model 缺失值当成 DefaultLit，也未顺带改 F0 映射、其它 GGX 项、几何或默认灯光。
+
+headless/cache 检查 0.406 秒、脚本 parse 0.437 秒、两图正常渲染路径检查 80.343 秒，均 exit0，引擎错误/警告签名为空。独立 CPU 审核 80 项通过，归档 `workbench/reports/landscape-drift-20261127/native-fresnel-runtime-cpu-v1/`。两图分别四轮检查全材质：无名岛每轮 586、游仙村每轮 370；各 70 项地形 uniform、shader 资源/源码、材料引用与参数恢复通过。这是 CPU 可见状态核对，不是逐项 GPU uniform 回读。非地形 ShaderMaterial 分别检查 433/300 个；两图各仅 1 个缓存 shader 带宏，总缓存 21/13。运行时候选源码去掉唯一 29 字节 define 后与旧式源码逐字相同，生产两文件仍匹配部署候选。
+
+每图在同一固定机位保存三张 PNG：临时旧式、候选、恢复候选后的重复图。这里“旧式”指此前 Godot 公式，不是原版 UE 截图；每图相机记录相同、time_scale=0，PNG 均为 960×540 RGB、SHA 与记录一致。
+
+| 地图 | 旧式与候选 | 候选与恢复后重复图 |
+|---|---|---|
+| 无名岛 | 文件哈希及全部像素 exact | 文件哈希及全部像素 exact |
+| 游仙村 | 73 像素、87 颜色通道不同，最大 1/255 | 16 像素、18 颜色通道不同，最大 1/255 |
+
+游仙村旧式与恢复图为 80 像素/93 通道差异，最大同为 1/255。无名岛 exact 不证明画面改善；游仙村候选重复图仍有差异，不能把旧式与候选之间的全部差异归因这条公式，更不能宣称原冻结漂移已解决。只覆盖保存的两个机位，不代表两图全范围或原版 UE 逐像素等价。
+
+上述 maps-v1 的游仙村最终 renderer shutdown 的 restored 状态及嵌套 errors 空已复核；无名岛换图前未保存单独的完整 shutdown JSON，其目标 shader/材料恢复由该图四轮核对覆盖，不能把 maps-v1 扩写为独立全栈 teardown 证明。后续 house 运行的单独恢复证据另述如下。
+
+该有限修正后又完成 `native-fresnel-capture-run-v1`：105.5 秒、exit0，引擎错误/警告签名为空。`native-fresnel-capture-v1/capture-refresh-validation.json` 中两图各两组六面 raw 的 SHA 逐面严格一致，`baseline_repeat` 和 `before_after` 均为 0 变化通道，`controller_state_restored=true`。这些是重建场景六面捕获的重复性与恢复检查，不是此前失败的 RenderDoc 抓帧，也不是主相机原地形局部灯冻结漂移已消失的证明。
+
+无名岛另完成运行时钟恢复检查：实际字段为 `live_time_capture.time_scale_restored=true`、`live_time_test.outer_time_scale_restored=true` 和 `live_time_test.process_mode_restored=true`；外层 time_scale 从 1 经捕获内部 0 返回 1。该项 `image_equality_asserted=false`，不能扩写为活跃时间前后图像 exact。
+
+`native-fresnel-integrated-v1` 已生成两图输出，原有 3 项 CPU 投影测试通过；其 manifest/raw provenance 已纳入下述最终独立 CPU 审阅。
+
+`native-fresnel-compare-run-v1` 已完成：109.313 秒、exit0，引擎错误/警告签名为空。两图各 default/water-center 两机位分别替换漫反射、反射及两者，再恢复；四机位恢复均为 0 变化通道。无名岛/游仙村各 434/301 个 ShaderMaterial、323/275 个 SH9 材质恢复检查 errors 为空。差异统计范围为全图字节，不是水体专用 ROI，也不证明原版 UE 像素等价；记录为 `native-fresnel-compare-v1/sky-refresh-comparison.json`。
+
+两图各一份 cubemap 和 SH9，共四份缓存已备份、部署并核对 SHA，记录为 `native-fresnel-cache-deployment-v1/deployment.json`。目标为 `project/source_reflection_candidate/{wuming,youxian}-source-scene-capture.res` 和 `project/sh9_candidate/{wuming,youxian}-source-sh9.json`；本次缓存更新与前述两个生产代码文件的有限改动分别记录，不能把“仅两文件”扩写为没有更新派生缓存。
+
+随后 production house 运行 159.64 秒、exit0，引擎错误/警告签名为空，最终 `SOURCE_REFLECTION_HOUSE_VALIDATED` 为 failures=[]、maps=2。已实读 `native-fresnel-production-house-v1/reflection-house-validation.json`：每图依次验证 outdoor-initial→indoor-1→outdoor-1→indoor-2→outdoor-2 五阶段，候选 sky 均保持、各阶段 errors 空；室内缓存 3 项，返回室外为 0。每图另外从室内执行 shutdown，`shutdown_from_indoor.status=restored`、`shutdown_assertions.house_outdoors=true`，errors 空，反射源恢复为 2、energy 恢复约 0.099。该运行验证实际 `house.set_inside` 状态切换和清理，不是角色穿门导航或行走验收。
+
+最终独立 CPU 审阅已归档 `workbench/reports/landscape-drift-20261127/native-fresnel-refresh-cpu-v1/`，322 项通过、失败 0。30 个 raw 文件的半精度值均有限，两图各两组冻结六面逐字节一致；按当前积分器重算两图各四组 SH9 系数，误差均为 0，三项解析探针通过。34 张 PNG 完整解码，20 张对照图的全字节差异独立重算，四机位旧缓存恢复仍为 0 通道；四资源来源/当前目标/之前备份哈希均核对，house 两图五阶段及室内关停恢复记录也已复核。
+
+审阅边界保留：当前积分器的逐面 box mip 不等于原引擎跨面 GPU mip 或 FP16 规约逐位复现；对照额外重复帧未保存，只能由运行报告支持。compare 的材料恢复记录没有单独序列化最终 controller 状态或 sky 资源身份，保存的旧/恢复像素 exact 只适用于四个机位。house 是状态记录与 10 张 PNG 解码，未断言 house 图像重复、实际穿门步行或全地图稳定。有限源公式补齐和缓存刷新不等于原冻结漂移修复、原版 UE 像素等价、完整复原或美术验收；TLV/caster 仍未默认启用。
+
+本轮 9 文件代码提交已在本地形成 `6b78ced243b4ed174172d282d67ff67c8f9a7a2f`（Restore native landscape Fresnel and refresh sky captures）；本节封存时尚未 push，不记作已同步远端。

@@ -4,6 +4,156 @@ extends "res://scripts/verification/verify_source_tlv_receiver.gd"
 var stage_effects: Array[CompositorEffect] = []
 var stage_names := ["post-opaque","before-atmosphere","after-atmosphere"]
 
+var renderdoc_gate_directory := ""
+var renderdoc_gate_run_id := ""
+
+func configure_renderdoc_gate() -> bool:
+	var gate_values: Array[String] = []
+	var run_values: Array[String] = []
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--drift-renderdoc-gate="): gate_values.append(arg.trim_prefix("--drift-renderdoc-gate="))
+		elif arg.begins_with("--drift-renderdoc-run-id="): run_values.append(arg.trim_prefix("--drift-renderdoc-run-id="))
+		elif arg=="--drift-renderdoc-gate" or arg=="--drift-renderdoc-run-id":
+			check(false,"RenderDoc gate options require explicit =values"); return false
+	if gate_values.is_empty() and run_values.is_empty(): return true
+	if gate_values.size()!=1 or run_values.size()!=1:
+		check(false,"RenderDoc gate requires exactly one directory and run ID"); return false
+	if not "--drift-landscape-raw-count-controls" in OS.get_cmdline_user_args():
+		check(false,"RenderDoc gate is only permitted with explicit raw-count control"); return false
+	var run_pattern := RegEx.new()
+	run_pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
+	if run_pattern.search(run_values[0])==null:
+		check(false,"RenderDoc run ID must be 1-96 ASCII letters/digits/._- starting with a letter or digit"); return false
+	var directory: String = gate_values[0].replace("\\","/").simplify_path().trim_suffix("/")
+	if not directory.is_absolute_path() or directory.begins_with("res:") or directory.begins_with("user:") or not DirAccess.dir_exists_absolute(directory):
+		check(false,"RenderDoc gate directory must be an existing absolute filesystem directory"); return false
+	for name in ["ready.json","ready.json.tmp","capture-complete.json","installed-shader.gdshader"]:
+		if FileAccess.file_exists(directory.path_join(name)):
+			check(false,"RenderDoc gate refuses pre-existing file: "+name); return false
+	renderdoc_gate_directory = directory
+	renderdoc_gate_run_id = run_values[0]
+	report["renderdoc_gate"] = {"enabled":true,"schema_version":1,"run_id":renderdoc_gate_run_id,"directory":directory,
+		"status":"configured","max_wait_wallclock_ms":90000,"boundary":"Two external RenderDoc captures during the frozen raw-count hold. Their frames are not claimed to match the later live compositor readbacks. No replay is requested by this diagnostic."}
+	return true
+
+func validate_renderdoc_completion(value: Variant, deadline: int) -> String:
+	if not value is Dictionary: return "completion is not a JSON object"
+	if value.get("schema_version",0)!=1 or value.get("status","")!="captured_not_replayed": return "completion schema/status mismatch"
+	if value.get("run_id","")!=renderdoc_gate_run_id or value.get("target_pid",0)!=OS.get_process_id(): return "completion run ID/PID mismatch"
+	var captures: Variant = value.get("captures",null)
+	if not captures is Array or captures.size()!=2: return "completion requires exactly two captures"
+	var hash_pattern := RegEx.new()
+	hash_pattern.compile("^[0-9a-f]{64}$")
+	var seen_paths: Dictionary = {}
+	for index in 2:
+		var capture: Variant = captures[index]
+		if not capture is Dictionary or capture.get("index",-1)!=index: return "capture index/order mismatch"
+		var path: String = str(capture.get("path","")).replace("\\","/").simplify_path()
+		if not path.is_absolute_path() or not path.to_lower().begins_with(renderdoc_gate_directory.to_lower()+"/") or path.get_extension().to_lower()!="rdc": return "capture path is not an RDC inside the gate directory"
+		if seen_paths.has(path.to_lower()): return "duplicate capture path"
+		seen_paths[path.to_lower()] = true
+		var expected_size: Variant = capture.get("bytes",0)
+		if not (expected_size is int or expected_size is float) or expected_size<=0 or float(expected_size)!=floor(float(expected_size)): return "capture size must be a positive integer"
+		var expected_hash: String = str(capture.get("sha256",""))
+		if hash_pattern.search(expected_hash)==null: return "capture SHA-256 metadata invalid"
+		var file := FileAccess.open(path,FileAccess.READ)
+		if file==null: return "capture file is missing/unreadable"
+		var actual_size := file.get_length()
+		if actual_size!=int(expected_size):
+			file.close()
+			return "capture size differs from completion metadata"
+		var context := HashingContext.new()
+		context.start(HashingContext.HASH_SHA256)
+		var remaining := actual_size
+		while remaining>0:
+			if Time.get_ticks_msec()>=deadline:
+				file.close()
+				return "90-second wall-clock deadline reached while validating capture files"
+			var chunk := file.get_buffer(mini(8*1024*1024,remaining))
+			if chunk.is_empty():
+				file.close()
+				return "capture file ended during SHA-256 validation"
+			context.update(chunk)
+			remaining -= chunk.size()
+			await process_frame
+		var size_after_hash := file.get_length()
+		file.close()
+		if Time.get_ticks_msec()>=deadline: return "90-second wall-clock deadline reached after capture validation yield"
+		if size_after_hash!=actual_size: return "capture size changed during SHA-256 validation"
+		if context.finish().hex_encode()!=expected_hash: return "capture SHA-256 differs from completion metadata"
+	return ""
+
+func wait_for_renderdoc_capture_gate(installed: Shader) -> void:
+	if renderdoc_gate_directory.is_empty(): return
+	var gate: Dictionary = report.renderdoc_gate
+	var ready_path := renderdoc_gate_directory.path_join("ready.json")
+	var temporary_path := renderdoc_gate_directory.path_join("ready.json.tmp")
+	var completion_path := renderdoc_gate_directory.path_join("capture-complete.json")
+	var shader_path := renderdoc_gate_directory.path_join("installed-shader.gdshader")
+	if FileAccess.file_exists(ready_path) or FileAccess.file_exists(temporary_path) or FileAccess.file_exists(completion_path) or FileAccess.file_exists(shader_path):
+		gate.status = "rejected_stale_files"
+		check(false,"RenderDoc gate files appeared before READY; continuing to raw readback and shader restore")
+		return
+	var frozen: bool = scene.process_mode==Node.PROCESS_MODE_DISABLED and Engine.time_scale==0.0
+	if not frozen:
+		gate.status = "rejected_not_frozen"
+		check(false,"RenderDoc gate requires frozen scene; continuing to raw readback and shader restore")
+		return
+	var shader_file := FileAccess.open(shader_path,FileAccess.WRITE)
+	if shader_file==null:
+		gate.status = "shader_source_write_failed"
+		check(false,"RenderDoc gate could not save installed shader source; continuing to raw readback and shader restore")
+		return
+	shader_file.store_string(installed.code)
+	shader_file.close()
+	if FileAccess.get_sha256(shader_path)!=installed.code.sha256_text():
+		gate.status = "shader_source_write_mismatch"
+		check(false,"RenderDoc gate installed shader source hash differs; continuing to raw readback and shader restore")
+		return
+	var ready := {"schema_version":1,"state":"ready","run_id":renderdoc_gate_run_id,"pid":OS.get_process_id(),
+		"phase":"landscape-raw-count","shader_sha256":installed.code.sha256_text(),"shader_source_path":shader_path,"frozen":true,"drawn_frame":Engine.get_frames_drawn()}
+	var handle := FileAccess.open(temporary_path,FileAccess.WRITE)
+	if handle==null:
+		gate.status = "ready_write_failed"
+		check(false,"RenderDoc gate could not write READY; continuing to raw readback and shader restore")
+		return
+	handle.store_string(JSON.stringify(ready,"\t"))
+	handle.close()
+	if DirAccess.rename_absolute(temporary_path,ready_path)!=OK:
+		gate.status = "ready_publish_failed"
+		check(false,"RenderDoc gate could not publish READY; continuing to raw readback and shader restore")
+		return
+	gate.status = "ready"
+	gate["ready"] = ready
+	gate["live_readback_captures_before_hold"] = report.captures.size()
+	var started := Time.get_ticks_msec()
+	progress("renderdoc raw-count ready")
+	while Time.get_ticks_msec()-started<90000:
+		if FileAccess.file_exists(completion_path):
+			var completion_text := FileAccess.get_file_as_string(completion_path)
+			var completion: Variant = JSON.parse_string(completion_text)
+			var error := await validate_renderdoc_completion(completion,started+90000)
+			gate["completion_file_sha256"] = completion_text.sha256_text()
+			gate["elapsed_wallclock_ms"] = Time.get_ticks_msec()-started
+			gate["release_drawn_frame"] = Engine.get_frames_drawn()
+			if not error.is_empty():
+				gate.status = "invalid_completion"
+				gate["error"] = error
+				if completion is Dictionary and completion.get("run_id","")==renderdoc_gate_run_id and completion.get("target_pid",0)==OS.get_process_id(): gate["completion"] = completion
+				check(false,"RenderDoc gate completion rejected: "+error+"; continuing to raw readback and shader restore")
+			else:
+				gate.status = "captured_not_replayed"
+				gate["completion"] = completion
+			progress("renderdoc gate released")
+			return
+		await process_frame
+	gate.status = "timeout"
+	gate["elapsed_wallclock_ms"] = Time.get_ticks_msec()-started
+	gate["release_drawn_frame"] = Engine.get_frames_drawn()
+	check(false,"RenderDoc gate timed out after 90 wall-clock seconds; continuing to raw readback and shader restore")
+	progress("renderdoc gate timeout")
+
+
 func landscape_value_snapshot(value: Variant) -> Variant:
 	return value.duplicate(true) if value is Array or value is Dictionary else value
 
@@ -406,6 +556,8 @@ func run_landscape_raw_count(target: ShaderMaterial, states: Dictionary, target_
 	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
 	await settle(20)
 	landscape_verify_materials(states,target_id,installed,"before-landscape-raw-count")
+	# A failed optional external capture gate must still reach the existing restore below.
+	await wait_for_renderdoc_capture_gate(installed)
 	for i in 4: await save_distortion("landscape-raw-count-%02d" % i)
 	landscape_verify_materials(states,target_id,installed,"after-landscape-raw-count")
 	if target.shader!=installed or target_state.shader.code.sha256_text()!=code.sha256_text():
@@ -533,6 +685,10 @@ func run() -> void:
 	if control_count>1:
 		check(false,"Drift control modes are mutually exclusive")
 		progress("rejected")
+		quit(2)
+		return
+	if not configure_renderdoc_gate():
+		progress("renderdoc gate rejected")
 		quit(2)
 		return
 	root.size = Vector2i(960,540)

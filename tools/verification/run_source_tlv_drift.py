@@ -38,9 +38,17 @@ def main():
     modes.add_argument('--landscape-direct-controls',action='store_true',help='Compare original, directional-only, local-only, no-direct and restored accumulations on one landscape; diagnostic only')
     modes.add_argument('--landscape-local-input-controls',action='store_true',help='Compare original, local count/color/attenuation/Lambert inputs and restored; diagnostic only')
     modes.add_argument('--landscape-raw-count-controls',action='store_true',help='Compare original, neutral-output local light count, and restored; strict raw integer validation required')
+    parser.add_argument('--renderdoc-gate',type=Path,help='Existing absolute fresh gate directory; only with --landscape-raw-count-controls')
+    parser.add_argument('--renderdoc-run-id',help='Explicit run ID shared with the external RenderDoc controller')
     parser.add_argument('--direct-youxian',action='store_true')
     args=parser.parse_args()
     try:
+        if (args.renderdoc_gate is None)!=(args.renderdoc_run_id is None):raise ValueError('RenderDoc gate and run ID must be supplied together')
+        if args.renderdoc_gate is not None:
+            if not args.landscape_raw_count_controls:raise ValueError('RenderDoc gate is only allowed with explicit raw-count controls')
+            if not args.renderdoc_gate.is_absolute() or not args.renderdoc_gate.is_dir():raise ValueError('RenderDoc gate must be an existing absolute directory')
+            if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,95}',args.renderdoc_run_id) is None:raise ValueError('Invalid RenderDoc run ID')
+            if any((args.renderdoc_gate/name).exists() for name in ('ready.json','ready.json.tmp','capture-complete.json','installed-shader.gdshader')):raise ValueError('RenderDoc gate contains stale READY/completion/source files')
         root=locate(args.root)
         if not math.isfinite(args.timeout) or args.timeout<=0:raise ValueError('--timeout must be finite and positive')
         godot=(root/(args.godot or Path('tools/godot/Godot_v4.7.2-stable_win64_console.exe'))).resolve()
@@ -54,6 +62,8 @@ def main():
         'res://scripts/verification/diagnostics/verify_tlv_drift.gd','--','--hide-ui','--tlv-out='+out.as_posix()]
     for active,flag in ((args.shadow_controls,'--drift-shadow-controls'),(args.unshaded_controls,'--drift-unshaded-controls'),(args.lf_controls,'--drift-lf-controls'),(args.landscape_controls,'--drift-landscape-controls'),(args.landscape_specular_controls,'--drift-landscape-specular-controls'),(args.landscape_cone_controls,'--drift-landscape-cone-controls'),(args.landscape_direct_controls,'--drift-landscape-direct-controls'),(args.landscape_local_input_controls,'--drift-landscape-local-input-controls'),(args.landscape_raw_count_controls,'--drift-landscape-raw-count-controls'),(args.direct_youxian,'--map=youxian')):
         if active:command.append(flag)
+    if args.renderdoc_gate is not None:
+        command.extend(['--drift-renderdoc-gate='+args.renderdoc_gate.resolve().as_posix(),'--drift-renderdoc-run-id='+args.renderdoc_run_id])
     source_paths={root/rel for rel in FILES}
     for directory in ('project/source_tlv_candidate','project/source_water_distortion_candidate','project/native_distortion_candidate','project/source_separate_translucency'):
         source_paths.update(p for p in (root/directory).glob('*') if p.is_file() and p.suffix!='.uid')
