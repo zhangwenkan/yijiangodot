@@ -80,7 +80,8 @@ func _bind(material: Material) -> void:
 	if unshaded_mode.search(code) != null or code.contains("void light()") or not code.contains("void fragment()"):
 		report.skipped_unlit+=1
 		return
-	var shader_key: int=material.shader.get_instance_id()
+	var native_f90 := bool(material.get_meta("source_landscape_compiled",false))
+	var shader_key := "%s:%s" % [material.shader.get_instance_id(),int(native_f90)]
 	if not _shaders.has(shader_key):
 		var open := code.find("{",code.find("void fragment()"))
 		var close:=open+1
@@ -91,7 +92,8 @@ func _bind(material: Material) -> void:
 			close+=1
 		var addition: String="\nsource_lf_fragment_world=(INV_VIEW_MATRIX*vec4(VERTEX,1.0)).xyz;\nsource_lf_f0=mix(vec3(0.16*SPECULAR*SPECULAR),ALBEDO,METALLIC);\nsource_lf_camera_distance=length(VERTEX);\n"
 		code=code.insert(close-1,addition)
-		code=code.replace("shader_type spatial;","shader_type spatial;\n#include \"%s\"\n" % INCLUDE)
+		var native_define := "#define SOURCE_LF_NATIVE_F90\n" if native_f90 else ""
+		code=code.replace("shader_type spatial;","shader_type spatial;\n"+native_define+"#include \"%s\"\n" % INCLUDE)
 		var shader:=Shader.new()
 		shader.code=code
 		_shaders[shader_key]=shader

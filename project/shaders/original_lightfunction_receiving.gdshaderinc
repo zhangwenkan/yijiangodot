@@ -99,7 +99,12 @@ void light() {
         float denominator=nh*nh*(a2-1.0)+1.0;
         float distribution=a2/max(PI*denominator*denominator,.000001);
         float visibility=.5/max(nl*sqrt(nv*nv*(1.0-a2)+a2)+nv*sqrt(nl*nl*(1.0-a2)+a2),.0001);
+        #ifdef SOURCE_LF_NATIVE_F90
+        float source_lf_f90=clamp(50.0*source_lf_f0.g,0.0,1.0);
+        vec3 fresnel=source_lf_f0+(vec3(source_lf_f90)-source_lf_f0)*pow(1.0-vh,5.0);
+        #else
         vec3 fresnel=source_lf_f0+(vec3(1.0)-source_lf_f0)*pow(1.0-vh,5.0);
+        #endif
         SPECULAR_LIGHT += radiance * distribution * visibility * fresnel * nl * SPECULAR_AMOUNT;
     }
 }
