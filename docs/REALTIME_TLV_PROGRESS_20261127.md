@@ -152,3 +152,35 @@ CPU 分析 V5 随后实际跑完两图，wrapper 218.609 秒、退出 0、错误
 无名 165 caster 完整标签逐项一致；游仙 134 项原始路径身份一致，74 项仅自动节点名数字后缀变化，按记录中的明确映射后 208 行一致，其余标签去 nodes 后的完整多重集一致。原始路径严格比较失败仍保留，不能称游仙 raw identity exact 或 GPU 实例归属已证明。此次路线低于各自 CPU 文本 V4，但仍高于旧 GPU 工作组 V4 的 22.972856/15.790978 秒；不同运行的系统负载未隔离，不能据此计算稳定提速率。门口仍有约 2 秒单次绘制间隔和约 3–4 秒失效至新组延迟，默认继续关闭；保留局部优化继续定位，未通过完整流畅性或画面验收。
 
 阶段证据按实际 V1、V2 修订、V3、CPU 文本 V4 两图与 CPU 分析 V5 双图分别保留；旧测试/审核失败不回写。原始 JSONL、ACK、运行日志留在本地 `workbench/reports/landscape-drift-20261127/`，独审与小测试拟集中归档 `cpu-timing-and-text-20261128/`；该归档动作和 Git 提交/推送须以实际执行结果为准，本文不预先记为已同步。Git 只取核心源码和小文档。本轮仍不证明原版 UE 完整等价、两图全地图画面、长期资源行为、GPU 逐片元 epoch 一致消费或美术验收。
+
+
+## 2026-11-28：房屋绑定复用 V6 / V7 与实际命中
+
+V6 新增保守的同集合复用：仅房屋状态失效可尝试；通用 owner 失效或两类合并仍完整重装。先检查 receiver 的归属、完整材质集合和库源码，提供原 Shader 视图；再重新核对 caster 的可见性、layers、shadow、fixed-Y、完整源码与模板、材质身份及引用图。集合、归属或图发生实际变化时保留 receiver.restore→释放→caster.restore→install 顺序。复用期间 receiver 保持 mode 0，只有当前 generation 的新鲜双级 pair 才恢复接收，不复用旧体积，也未改 age 8、ACK、数值门槛或 Shader 公式。
+
+V6 两图实际路线 wrapper 104.625 秒、exit 0、errors/warnings 空，但四次房屋转换全部回退，没有任何复用命中。其路线虽比 V5 短，不能归因为复用优化。后续只增加有界图差异诊断；单无名运行发现进/出屋 71/65 项差异，全部是 shadow OFF 的原粒子 visible_instance_count 随模拟变化。3701 个几何实例及其材质关系保持，不能将这个计数当成静态引用关系变化。
+
+V7 仅允许已验证身份的原粒子忽略该实时计数：从实际 original_particles.gd driver 的 _emitters 获取 draw/multi 关系，检查脚本、_generated/_world 父节点、source/source_group 和 metadata，保存 owner/source 身份。未知实例、伪 metadata、重复归属、source 或 owner 变化、容量/mesh/材质槽/next_pass/shadow 变化仍拒绝；不跳过整张引用图，也不忽略所有 MultiMesh 的数量变化。引用图本身不校验 mesh 顶点内容，不能扩展为任意原地几何编辑的等价保证。
+
+V7 最终干净 CPU 运行通过 30 项新用例及 60 项前版回归；独立源码逆变换与依赖审核 123 项通过。首轮虽打印 28 项通过却有 7 条 String/int 诊断比较错误，已按实际类型比较修正，旧日志原样保留，不以进程 exit 0 覆盖错误。
+
+最终两图实际运行 `realtime-house-reuse-v7-run` 为 98.390 秒、exit 0、errors/warnings 空。独立审核沿用 142 项自测及原 route/ACK/freshness/source 合同，封存前 40 项输入稳定性检查通过。无名两次 reused，只有初装 generation [0]，两次切换中没有 restore/install 调用；游仙两次明确因 Visible caster material count changed（208→205→208）重装，generation [0,1,2]。
+
+| 本轮单次路线观测 | 无名 V6 | 无名 V7 | 游仙 V6 | 游仙 V7 |
+|---|---:|---:|---:|---:|
+| 路线墙钟秒 | 13.405222 | 10.858271 | 11.793684 | 12.099668 |
+| 最大 post-draw 间隔秒 | 1.144497 | 0.605975 | 0.958445 | 1.110353 |
+| 进屋失效到 fresh 秒 | 2.124222 | 0.752735 | 1.425561 | 1.589363 |
+| 出屋失效到 fresh 秒 | 2.331069 | 0.707447 | 1.670421 | 1.803322 |
+| 进屋检查秒 | 0.125256 | 0.453031 | 0.070854 | 0.229703 |
+| 出屋检查秒 | 0.125490 | 0.430353 | 0.068267 | 0.225781 |
+
+无名 V7 检查更深入、检查本身更慢，但省掉两次 caster 和 receiver 重装；游仙仍需重装，本次总量和尾部间隔反而更长，不能称两图都改善。以上都是各版本一次带诊断运行，其他用户 Godot 工程、驱动缓存和系统负载未隔离；不是稳定提速率、引擎 FPS、GPU 硬件时间或输入延迟。无名仍有约 0.606 秒的最大绘制间隔，未通过流畅性验收。
+
+两图相对 V6 的 phase/state/599或575 physics tick/模拟时间/足点均 exact；这不覆盖 V5→V6 游仙约 0.14219045mm 的既有差异。无名 59 完整 ACK（55 accepted/3 rejected/1 retired）、恢复 165 caster+28 receiver；游仙 92 ACK（88/3/1）、恢复 208+2；两图 closed。无名完整 165 条最终 caster label exact；游仙 74 条 nodes 自动名字后缀变化（20 SourceBird/54 SourceAmbient），其余标签去 nodes 后多重集 exact，原始差异保留，不称跨运行对象 identity 相同。receiver 无完整逐材质跨运行 inventory。
+
+`shader_assignments: 0` 是代码声明，不作为独立运行测量；实际复用证据来自已审且 source hash 对应的无 Shader 指派路径、实际 owner/code/template/visible set 检查、没有重装事件及后续 verify/restore 无冲突。未获得逐材料 Shader 实例 ID 轨迹或逐 fragment epoch，不扩大证据范围。
+
+本轮九个已封存包和四份 CPU 日志已按逐文件 SHA 归档，合计 150,035,069 字节（含便携视频包）；索引为 `workbench/reports/landscape-drift-20261127/house-reuse-and-video-20261128/archive-index.json`。V7 实际独审包 manifest 为 `d6a2c8645736ec6c5516cbc27ce5658f56581cf5fa1ac88f469dd9978723b42d`。失败历史未删除；原始 GPU/路线记录仍在各 run/output 目录。
+
+两图正常速度录像另见 `docs/SCENE_COMPARISON_20261128.md`。它们采用默认 TLV 关闭场景，不是 V7 卡顿性能证据。默认 Vulkan 和 TLV 关闭保持；局部灯体积、完整 UE 后期/透明受光、全地图动态/显隐/通行、长期稳定性和美术验收仍未完成。游仙集合变化下的安全增量处理、检查成本以及实际正常行走体验仍待后续。本轮文档写入时上一已同步提交为 `2c16e6b`，新提交与推送结果以 Git 实际记录为准。

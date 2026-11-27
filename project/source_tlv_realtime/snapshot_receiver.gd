@@ -11,6 +11,7 @@ var _cpu_build_serial := 0
 var _cpu_scan_stats: Dictionary = {}
 var _cpu_scan_depth := 0
 var _cpu_bind_depth := 0
+var _house_inventory: Dictionary = {}
 
 func set_mode(mode: int) -> void:
 	_mode=clampi(mode,0,2)
@@ -133,6 +134,10 @@ func _cpu_emit_build_stats(stage: String, install_result: Dictionary) -> void:
 	_cpu_emit_scan_stats("receiver_scan_summary",install_result)
 
 func _scan(node: Node) -> void:
+	if not _house_inventory.is_empty():
+		_house_inventory.nodes+=1
+		super._scan(node)
+		return
 	if cpu_stage_timing==null:
 		super._scan(node)
 		return
@@ -151,6 +156,9 @@ func _scan(node: Node) -> void:
 		_cpu_scan_stats.scan_last_end_us=ended_us
 
 func _bind(material: Material, node: Node) -> void:
+	if not _house_inventory.is_empty():
+		_house_inventory_bind(material,node)
+		return
 	if cpu_stage_timing==null:
 		super._bind(material,node)
 		return
@@ -170,6 +178,7 @@ func _bind(material: Material, node: Node) -> void:
 		else: _cpu_scan_stats.bind_outside_scan_elapsed_us+=elapsed_us
 
 func _without_comments(code: String) -> String:
+	if not _house_inventory.is_empty(): return COMMENT_MASK.without_comments(code)
 	if cpu_stage_timing==null: return COMMENT_MASK.without_comments(code)
 	if _cpu_scan_stats.is_empty(): _cpu_reset_scan_stats()
 	var in_scan := _cpu_scan_depth>0
@@ -208,3 +217,60 @@ func _cpu_emit_scan_stats(stage: String, install_result: Dictionary) -> void:
 	summary.scope="Overlapping aggregates: scan roots contain bind roots, and both contain comment cleaning. Comment time overlaps existing build totals. Only in-scan comments may be subtracted from scan. Remainders are unattributed, not Shader compile time."
 	install_result.cpu_scan_breakdown=summary
 	cpu_stage_timing.record_event(stage,summary)
+
+func check_house_reuse(scene: Node) -> Dictionary:
+	# Pure inspection while the invalidated receiver remains in original-sun mode.
+	var errors := owner_errors()
+	if not errors.is_empty(): return {"status":"failed","reason":"Receiver owner conflict.","errors":errors}
+	if _saved.is_empty(): return {"status":"reinstall","reason":"Receiver has no saved bindings."}
+	if not is_instance_valid(scene): return {"status":"failed","reason":"Missing receiver scene."}
+	var world: Variant=scene.get("world")
+	if not world is Node: return {"status":"failed","reason":"Expected scene.world."}
+	var suns: Array[Node]=world.find_children("*","DirectionalLight3D",true,false)
+	if suns.size()!=1: return {"status":"failed","reason":"Sun-only receiver requires exactly one directional light."}
+	for light in world.find_children("*","Light3D",true,false):
+		if not is_zero_approx(light.get_param(Light3D.PARAM_SIZE)):
+			return {"status":"failed","reason":"Particle Lambert preservation requires zero light_size/angular_distance."}
+	var library_path: String=get_script().resource_path.get_base_dir().path_join("source_tlv_sun_receiver.gdshaderinc")
+	var current_library := FileAccess.get_file_as_string(library_path)
+	if current_library.is_empty() or current_library!=_library:
+		return {"status":"reinstall","reason":"Receiver shader library changed or missing."}
+	if _mode!=0 or not report.get("mode_conflicts",[]).is_empty():
+		return {"status":"failed","reason":"Receiver has not reached clean original-sun fallback."}
+	var owned: Dictionary={}
+	var views: Dictionary={}
+	for state in _saved:
+		var id: int=state.material.get_instance_id()
+		if state.material.get_shader_parameter("source_tlv_sun_mode")!=0:
+			return {"status":"failed","reason":"Owned receiver mode differs from fallback."}
+		owned[id]=state
+		views[id]=state.shader
+	_house_inventory={"seen":{},"found":{},"families":{},"owned":owned,"views":views,"reason":"","nodes":0}
+	_scan(world)
+	var inventory: Dictionary=_house_inventory
+	_house_inventory={}
+	if not str(inventory.reason).is_empty():
+		return {"status":"reinstall","reason":inventory.reason,"previous_bound":_saved.size(),"current_bound":inventory.found.size()}
+	if inventory.found.size()!=_saved.size():
+		return {"status":"reinstall","reason":"Receiver material set changed.","previous_bound":_saved.size(),"current_bound":inventory.found.size()}
+	errors=owner_errors()
+	if not errors.is_empty(): return {"status":"failed","reason":"Receiver owner changed during check.","errors":errors}
+	return {"status":"reused","reason":"Same receiver materials including hidden geometry; owners and library unchanged.","bound":_saved.size(),"source_views":views,"scanned_nodes":inventory.nodes}
+
+func _house_inventory_bind(material: Material, node: Node) -> void:
+	if material==null or _house_inventory.seen.has(material.get_instance_id()): return
+	var id := material.get_instance_id()
+	_house_inventory.seen[id]=true
+	_house_inventory_bind(material.next_pass,node)
+	if not material is ShaderMaterial or material.shader==null: return
+	var source: Shader=_house_inventory.views.get(id,material.shader)
+	var code: String=source.code
+	if not _house_inventory.families.has(code):
+		_house_inventory.families[code]=_family(_without_comments(code))
+	var family: String=_house_inventory.families[code]
+	if family.is_empty(): return
+	_house_inventory.found[id]=true
+	if not _house_inventory.owned.has(id):
+		_house_inventory.reason="New matching receiver material requires original install."
+	elif family!=_house_inventory.owned[id].family:
+		_house_inventory.reason="Receiver family changed."

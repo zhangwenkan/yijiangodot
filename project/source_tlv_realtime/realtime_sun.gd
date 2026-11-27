@@ -26,6 +26,7 @@ var _last_pose := Transform3D.IDENTITY
 var _camera_projection: Array = []
 var _house: Node
 var _rescan_casters := false
+var _house_reuse_allowed := false
 var _diagnostic_directory := ""
 var cpu_stage_timing: RefCounted
 
@@ -134,22 +135,31 @@ func _cpu_body__pre_draw() -> void:
 		# rescanning newly-visible potential casters under the same template rules.
 		if not _inflight.is_empty(): return
 		_cpu_event("rescan_begin")
-		if _receiver!=null:
-			var cpu_receiver_restore: int = _cpu_begin("receiver_restore")
-			var receiver_restored: Dictionary = _receiver.restore()
-			_cpu_end(cpu_receiver_restore)
-			if not receiver_restored.errors.is_empty(): stop("Receiver rescan owner conflict: "+str(receiver_restored)); return
-			_receiver.queue_free()
-			_receiver=null
-		var cpu_caster_restore: int = _cpu_begin("caster_restore")
-		var restored: Dictionary = _caster.restore()
-		_cpu_end(cpu_caster_restore)
-		if not restored.errors.is_empty(): stop("Caster rescan owner conflict: "+str(restored)); return
-		var cpu_caster_install: int = _cpu_begin("caster_install")
-		var rescanned: Dictionary = _caster.install(_scene,camera,0xFFFFF,false,true)
-		_cpu_end(cpu_caster_install)
-		if rescanned.get("status")!="installed": stop("Caster rescan rejected: "+str(rescanned)); return
+		var cpu_reuse: int=_cpu_begin("house_binding_reuse_check")
+		var reuse: Dictionary=_reuse_house_bindings()
+		_cpu_end(cpu_reuse)
+		_cpu_event("house_binding_reuse",reuse)
+		report.last_house_binding_reuse=reuse.duplicate(true)
+		if reuse.status=="failed": stop("House binding owner/contract conflict: "+str(reuse)); return
+		var rescanned: Dictionary=_caster.report
+		if reuse.status!="reused":
+			if _receiver!=null:
+				var cpu_receiver_restore: int = _cpu_begin("receiver_restore")
+				var receiver_restored: Dictionary = _receiver.restore()
+				_cpu_end(cpu_receiver_restore)
+				if not receiver_restored.errors.is_empty(): stop("Receiver rescan owner conflict: "+str(receiver_restored)); return
+				_receiver.queue_free()
+				_receiver=null
+			var cpu_caster_restore: int = _cpu_begin("caster_restore")
+			var restored: Dictionary = _caster.restore()
+			_cpu_end(cpu_caster_restore)
+			if not restored.errors.is_empty(): stop("Caster rescan owner conflict: "+str(restored)); return
+			var cpu_caster_install: int = _cpu_begin("caster_install")
+			rescanned = _caster.install(_scene,camera,0xFFFFF,false,true)
+			_cpu_end(cpu_caster_install)
+			if rescanned.get("status")!="installed": stop("Caster rescan rejected: "+str(rescanned)); return
 		_rescan_casters=false
+		_house_reuse_allowed=false
 		report.caster=rescanned
 		_cpu_event("rescan_end")
 	var cpu_caster_prepare: int = _cpu_begin("caster_prepare")
@@ -371,11 +381,13 @@ func _on_house_state(inside: bool) -> void:
 func _cpu_body__on_house_state(inside: bool) -> void:
 	_inside=inside
 	_house_generation+=1
+	if not _rescan_casters: _house_reuse_allowed=true
 	_rescan_casters=true
 	_cpu_event("house_invalidated",{"drain_required":not _inflight.is_empty(),"inflight_token":int(_inflight.get("snapshot_id",-1))})
 	_invalidate("House state changed after source lighting update.")
 
 func invalidate_owner(reason: String) -> void:
+	_house_reuse_allowed=false
 	_owner_generation+=1
 	_rescan_casters=true
 	_invalidate(reason)
@@ -482,3 +494,18 @@ func _cpu_event(stage: String, extra: Dictionary = {}) -> void:
 	var context := _cpu_context()
 	context.merge(extra,true)
 	cpu_stage_timing.record_event(stage,context)
+
+func _reuse_house_bindings() -> Dictionary:
+	if not _house_reuse_allowed:
+		return {"status":"reinstall","reason":"Pending rescan includes a generic owner invalidation."}
+	var receiver_check: Dictionary={"status":"reused","bound":0,"source_views":{}}
+	if _receiver!=null:
+		receiver_check=_receiver.check_house_reuse(_scene)
+		if receiver_check.status!="reused":
+			return {"status":receiver_check.status,"reason":receiver_check.get("reason","Receiver reuse unavailable."),"receiver":receiver_check}
+	var caster_check: Dictionary=_caster.reuse_after_house(_scene,_scene.camera,receiver_check.get("source_views",{}))
+	if caster_check.status!="reused":
+		return {"status":caster_check.status,"reason":caster_check.get("reason","Caster reuse unavailable."),"caster":caster_check}
+	if _receiver!=null:
+		_receiver.report.house_reuse={"reused_materials":int(receiver_check.bound),"shader_assignments":0,"scanned_nodes":int(receiver_check.scanned_nodes)}
+	return {"status":"reused","reason":"Same proven binding sets retained in fallback until a fresh pair.","caster_bound":int(caster_check.bound),"receiver_bound":int(receiver_check.bound)}

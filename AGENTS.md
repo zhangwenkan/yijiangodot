@@ -116,3 +116,10 @@ CPU文本V4保持同一regex/Unicode位置/LF与旧字符串行为，用repeat/j
 V4无名verify中位35.992→4.284ms但路线33.597777秒高于计时V1/V2，游仙25.215411秒也高于旧GPU V4，局部改善不称整体加速。V5双图218.609秒exit0clean；路线无名28.320491/游仙19.626735秒、caster进出1.146753/1.364717与1.100708/1.149747秒，maxpost2.233761/2.066088秒，失效到fresh4.284907/4.205785与3.415195/4.335282秒。599/575tick及相对各自CPU V4足点/phase/state/sim exact，42/41完整ACK、165+28/208+2恢复closed。每代实际build miss5/6，保留逐材质扫描和owner检查。无名165caster完整标签exact；游仙134原路径相同、74自动名后缀按明确映射后完整208行一致，原raw路径失败保留，不声称raw identity/GPU归属exact；receiver无完整inventory，不扩成逐Shader跨run核对。
 
 V5路线仍高于旧GPU V4的22.972856/15.790978秒，系统负载未隔离，不报稳定提速率；门口仍约2秒绘制间隔及3–4秒新组延迟，默认关闭。完整复原、美术和流畅性验收未完成。实际V1/V2修订/V3/V4两图/V5双图及旧失败独立保存，本地大分析/JSONL/ACK不进Git；Git提交与推送只按实际执行另记。详情见 `docs/REALTIME_TLV_PROGRESS_20261127.md`。
+
+
+2026-11-28 房屋绑定 V7：仅房屋失效且 receiver/caster 原身份、完整源码/模板、可见材质集合和引用图均通过才保留安装 Shader；通用失效/真实集合变化仍按 receiver→caster 顺序恢复并重装。原粒子 visible_instance_count 例外必须由实际 original_particles.gd 的 _emitters、draw/multi、父节点和 source 身份证明，且 shadow OFF；未知/伪 metadata、owner/source/容量/mesh/槽位/shadow 变化仍拒绝。保持 mode0 等当前 generation 新鲜 pair，age8/ACK/数值门槛不改，默认 TLV 关闭。
+
+V6 四次转换均未命中；V7 干净30+60 CPU测试、123源码独审通过，实际双图98.390秒exit0clean及142审核自测/40输入稳定性通过。无名两次reused且无中途restore/install，路线13.405222→10.858271秒、maxpost1.144497→0.605975秒、fresh2.124222/2.331069→0.752735/0.707447秒；游仙208→205→208两次保守重装，route11.793684→12.099668秒、maxpost0.958445→1.110353秒，未改善。两图V6→V7脚点/phase/state/ticks/sim exact，59/92完整ACK及恢复165+28/208+2 closed。游仙74条自动节点名差异保留，不称跨runidentity；shader_assignments=0本身不是独立测量。单次带诊断结果非稳定性能/流畅性结论；String/int七条旧错误和先前未命中历史全部保留。
+
+正常速度对照已归档 `artifacts/scene-comparison-20261128/compare.html`（9段本地视频，默认1×、无音频、独立时间轴）。用户实际完成两图原版行走；旧gdigrab冻结录屏不作有效证据。游仙原版行走捕获很稀疏，不能评价原作流畅度；无此次原版房屋录像，Godot进出屋是独立演示。Godot录像time_scale1、默认TLV关闭，不当V7性能证据。脚本/引用/解码已查，浏览器UI检查被工具因无法确定当前URL而停止，未声称点击播放验收。水面偏亮青蓝、沙草亮部偏白、无名箱桶显隐和屋内窗面仍待来源核对；不默认统一降亮度/删物体补齐差异。完整复原仍未完成，参见 `docs/SCENE_COMPARISON_20261128.md` 和 TLV进度末节。证据精确归档索引为 `workbench/reports/landscape-drift-20261127/house-reuse-and-video-20261128/archive-index.json`；大录像/资产不进Git。
