@@ -1,5 +1,6 @@
 ﻿param(
     [ValidateSet('wuming', 'youxian')][string]$Map = 'wuming',
+    [ValidateSet('vulkan', 'd3d12')][string]$RenderingDriver = '',
     [switch]$Inspect,
     [switch]$LegacyLighting,
     [switch]$ForceImport,
@@ -129,6 +130,7 @@ try {
     $title = if ($Map -eq 'wuming') { '无名岛' } else { '游仙村' }
     Write-LaunchStatus ('正在准备 Godot {0}。首次加载可能需要数十秒，请保留此窗口。' -f $title)
     Write-LaunchStatus ('启动记录：' + $launcherLog)
+    if ($RenderingDriver) { Write-LaunchStatus ('本次指定渲染后端：{0} / Forward+；未改项目默认设置。' -f $RenderingDriver) }
     foreach ($required in @($godotConsole, $godotWindow, (Join-Path $godotProject 'project.godot'), (Join-Path $godotProject ('assets\' + $Map + '\world.glb')), (Join-Path $godotProject ('assets\' + $Map + '\collision.glb')))) {
         if (-not [IO.File]::Exists($required)) { throw ('找不到必要文件：' + $required) }
     }
@@ -143,7 +145,7 @@ try {
         $_.CommandLine -and $_.CommandLine.Replace('/', '\').ToLowerInvariant().Contains($normalizedProject) -and $_.CommandLine -notmatch '--headless|--editor'
     })
     $sameMap = @($existing | Where-Object { $_.CommandLine.Contains('--map=' + $Map) })
-    if ($sameMap.Count -and -not $VerifyLaunch) {
+    if ($sameMap.Count -and -not $VerifyLaunch -and -not $RenderingDriver) {
         Write-LaunchStatus ('此地图已经运行，进程 {0}；请从任务栏切回游戏窗口。可在游戏界面切换地图。' -f $sameMap[0].ProcessId)
         exit 0
     }
@@ -153,6 +155,7 @@ try {
         $importError = Join-Path $logDirectory ($stamp + '-' + $Map + '-import-stderr.log')
         $importOut = Join-Path $logDirectory ($stamp + '-' + $Map + '-import-stdout.log')
         $importArguments = @('--headless', '--editor', '--path', ('"' + $godotProject + '"'), '--import', '--log-file', ('"' + $importLog + '"'))
+        if ($RenderingDriver) { $importArguments += @('--rendering-driver', $RenderingDriver, '--rendering-method', 'forward_plus') }
         $importChild = Start-LaunchChild -FilePath $godotConsole -Arguments $importArguments -WorkingDirectory $godotProject -Hidden -OutputLog $importOut -ErrorLog $importError
         $importProcess = $importChild.Process
         $deadline = (Get-Date).AddMinutes(10)
@@ -169,6 +172,7 @@ try {
         Write-LaunchStatus '资源导入完成。'
     }
     $gameArguments = @('--path', ('"' + $godotProject + '"'), '--log-file', ('"' + $runtimeLog + '"'))
+    if ($RenderingDriver) { $gameArguments += @('--rendering-driver', $RenderingDriver, '--rendering-method', 'forward_plus') }
     if ($VerifyLaunch) { $gameArguments += @('--quit-after', '180', '--resolution', '1280x720') }
     $gameArguments += @('--', ('--map=' + $Map))
     if ($VerifyLaunch) {
@@ -184,6 +188,8 @@ try {
     $null = $game.Handle
     $deadline = (Get-Date).AddSeconds(90)
     $ready = $false
+    $actualDriver = ''
+    $actualMethod = ''
     while ((Get-Date) -lt $deadline) {
         if ($game.WaitForExit(1000)) {
             throw ('游戏在载入期间退出，返回码 {0}。请查看：{1}' -f $game.ExitCode, $runtimeLog)
@@ -192,9 +198,20 @@ try {
             $contents = Read-SharedLaunchLog $runtimeLog
             if ($null -eq $contents) { continue }
             if ($contents -match 'SCRIPT ERROR:|Parse Error:|Failed loading resource:') { throw ('游戏日志包含脚本/资源错误，请查看：' + $runtimeLog) }
-            if ($contents -match ('ORIGINAL_PLAY_READY[^\r\n]*' + $Map + '[^\r\n]*supported[=: ]+true')) { $ready = $true; break }
+            if ($RenderingDriver -and $contents -match '(?m)^(Vulkan|D3D12)\s+[^\r\n]* - (Forward\+|Mobile) -') {
+                $actualDriver = $Matches[1].ToLowerInvariant()
+                $actualMethod = $Matches[2]
+                if ($actualDriver -ne $RenderingDriver -or $actualMethod -ne 'Forward+') {
+                    throw ('实际后端 {0}/{1} 与指定 {2}/Forward+ 不符，请查看：{3}' -f $actualDriver, $actualMethod, $RenderingDriver, $runtimeLog)
+                }
+            }
+            if ($contents -match ('ORIGINAL_PLAY_READY[^\r\n]*' + $Map + '[^\r\n]*supported[=: ]+true')) {
+                if (-not $RenderingDriver -or $actualDriver) { $ready = $true; break }
+            }
         }
     }
+    if ($RenderingDriver -and -not $actualDriver) { throw ('未能从引擎日志确认指定渲染后端；请查看：' + $runtimeLog) }
+    if ($RenderingDriver) { Write-LaunchStatus ('引擎日志确认后端：{0} / {1}。' -f $actualDriver, $actualMethod) }
     if ($ready) { Write-LaunchStatus ('{0}已载入，进程 {1}。WASD/方向键行走，Tab 隐藏界面。' -f $title, $game.Id) }
     else { Write-LaunchStatus ('游戏仍在运行，进程 {0}，尚未看到载入完成标志；请等待并查看游戏日志。' -f $game.Id) }
     if ($VerifyLaunch) {
@@ -208,7 +225,7 @@ try {
             throw ('自动验证失败，退出码：' + $game.ExitCode)
         }
         if (-not [IO.File]::Exists($capturePath)) { throw '自动验证未生成截图。' }
-        $report = [ordered]@{ map=$Map; project=$godotProject; engine=$godotWindow; ready=$ready; exit_code=$game.ExitCode; log=$runtimeLog; capture=$capturePath }
+        $report = [ordered]@{ map=$Map; project=$godotProject; engine=$godotWindow; ready=$ready; exit_code=$game.ExitCode; log=$runtimeLog; capture=$capturePath; requested_driver=$RenderingDriver; actual_driver=$actualDriver; actual_method=$actualMethod }
         $report | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $logDirectory ($stamp + '-' + $Map + '-verification.json')) -Encoding UTF8
         Write-LaunchStatus '自动验证通过；独立工程已载入、截图并正常退出。'
     } else {
