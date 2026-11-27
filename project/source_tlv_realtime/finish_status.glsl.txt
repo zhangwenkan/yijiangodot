@@ -1,0 +1,54 @@
+#version 450
+// Reads filtered outputs before acknowledging them: status readback cannot pass
+// the filter merely because the earlier injection finished first.
+layout(local_size_x=4, local_size_y=4, local_size_z=4) in;
+layout(set=0,binding=0,rgba16f) uniform readonly image3D ambient_volume;
+layout(set=0,binding=1,rgba16f) uniform readonly image3D directional_volume;
+struct Row { uvec4 counts; uvec4 identity; uvec4 clock_now; uvec4 clock_prev; uvec4 observed; uvec4 reserved; };
+layout(set=0,binding=2,std430) buffer Status { Row row[2]; } status;
+// Exact non-double 4.7.2 layout. First callback verifies full byte size once.
+// 2848 bytes per block, current time at 2816, previous time at 5664.
+layout(set=0,binding=3,std140) uniform SceneUBO { uvec4 data[356]; } scene;
+layout(push_constant,std430) uniform Push { vec4 radiance; vec4 direction; uvec4 identity; uvec4 meta; } p;
+
+// Diagnostic status reduction only. Every invocation reaches both barriers;
+// early returns stay inside the voxel helper, never bypassing synchronization.
+shared uint source_group_error;
+shared uint source_group_invalid;
+shared uint source_group_valid;
+bool finite4(vec4 v) { return !any(isnan(v)) && !any(isinf(v)); }
+void source_process_voxel() {
+    ivec3 cell = ivec3(gl_GlobalInvocationID);
+    if(any(greaterThanEqual(cell,ivec3(64)))) return;
+    uint c = p.meta.x;
+    if(!finite4(imageLoad(ambient_volume,cell)) || !finite4(imageLoad(directional_volume,cell))) {
+        atomicOr(source_group_error,16u);
+        atomicAdd(source_group_invalid,1u);
+    } else { atomicAdd(source_group_valid,1u); }
+    if(all(equal(cell,ivec3(0)))) {
+        status.row[c].identity=p.identity;
+        status.row[c].clock_now=scene.data[176];
+        status.row[c].clock_prev=scene.data[354];
+        // emissive gain, IBL gain, camera mask, pass alpha (all raw bits).
+        status.row[c].observed=scene.data[177];
+        // Directional count at 2672; exact scene dimensions are separately checked.
+        status.row[c].reserved=uvec4(scene.data[167].x,p.meta.x,p.meta.y,0u);
+    }
+}
+
+void main() {
+    if (gl_LocalInvocationIndex == 0u) {
+        source_group_error = 0u;
+        source_group_invalid = 0u;
+        source_group_valid = 0u;
+    }
+    barrier();
+    source_process_voxel();
+    barrier();
+    if (gl_LocalInvocationIndex == 0u) {
+        uint c = p.meta.x;
+        if (source_group_error != 0u) atomicOr(status.row[c].counts.x, source_group_error);
+        if (source_group_invalid != 0u) atomicAdd(status.row[c].counts.y, source_group_invalid);
+        if (source_group_valid != 0u) atomicAdd(status.row[c].counts.w, source_group_valid);
+    }
+}

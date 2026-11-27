@@ -1,0 +1,70 @@
+#version 450
+// Single real sun. The source LF remains in the raster probe for its derivatives.
+// No default shadow/LF, no CPU volume buffer, no second source-energy / PI.
+layout(local_size_x=4, local_size_y=4, local_size_z=4) in;
+layout(set=0,binding=0,rgba16f) uniform readonly image2D atlas;
+layout(set=0,binding=1,rgba16f) uniform writeonly image3D ambient_volume;
+layout(set=0,binding=2,rgba16f) uniform writeonly image3D directional_volume;
+struct Row { uvec4 counts; uvec4 identity; uvec4 clock_now; uvec4 clock_prev; uvec4 observed; uvec4 reserved; };
+layout(set=0,binding=3,std430) buffer Status { Row row[2]; } status;
+layout(push_constant,std430) uniform Push {
+    vec4 radiance;
+    vec4 direction;
+    uvec4 identity; // snapshot, install, house, owner
+    uvec4 meta; // cascade, request frame, unused, unused
+} p;
+
+// Diagnostic status reduction only. Every invocation reaches both barriers;
+// early returns stay inside the voxel helper, never bypassing synchronization.
+shared uint source_group_error;
+shared uint source_group_invalid;
+shared uint source_group_valid;
+bool finite4(vec4 v) { return !any(isnan(v)) && !any(isinf(v)); }
+void reject(uint reason) {
+    atomicOr(source_group_error, reason);
+    atomicAdd(source_group_invalid, 1u);
+}
+void source_process_voxel() {
+    uvec3 cell = gl_GlobalInvocationID;
+    if(any(greaterThanEqual(cell,uvec3(64)))) return;
+    if(imageSize(atlas)!=ivec2(512) || imageSize(ambient_volume)!=ivec3(64) || imageSize(directional_volume)!=ivec3(64)) { reject(1u); return; }
+    ivec2 pixel = ivec2((cell.z%8u)*64u+cell.x,(cell.z/8u)*64u+cell.y);
+    vec4 sample_value = imageLoad(atlas,pixel);
+    if(!finite4(sample_value) || sample_value.b!=1.0 || sample_value.r<0.0 || sample_value.r>1.0) { reject(2u); return; }
+    if(!finite4(p.radiance) || !finite4(p.direction) || !(dot(p.direction.xyz,p.direction.xyz)>1e-12)) { reject(4u); return; }
+    precise float contribution = sample_value.r * sample_value.g;
+    if(p.meta.x==1u) {
+        vec3 uv = (vec3(cell)+vec3(0.5))/64.0;
+        vec3 faded = uv*(1.0+4.0/64.0)-vec3(2.0/64.0);
+        vec3 factors = clamp((vec3(0.5)-abs(faded-vec3(0.5)))*10.0,vec3(0.0),vec3(1.0));
+        precise float weight = factors.x*factors.y*factors.z;
+        contribution = 1.0+(contribution-1.0)*weight;
+    }
+    precise vec4 value = vec4(p.radiance.rgb*contribution,contribution);
+    vec3 direction = normalize(p.direction.xyz);
+    vec4 ambient = vec4(value.rgb*0.282095,value.a);
+    vec3 basis = vec3(-direction.y,direction.z,-direction.x)*0.488603;
+    vec3 luma = vec3(0.3,0.59,0.11);
+    vec4 directional = vec4(dot(value.rgb*basis.x,luma),dot(value.rgb*basis.y,luma),dot(value.rgb*basis.z,luma),0.0);
+    if(!finite4(ambient) || !finite4(directional) || any(greaterThan(abs(ambient),vec4(65504.0))) || any(greaterThan(abs(directional),vec4(65504.0)))) { reject(8u); return; }
+    imageStore(ambient_volume,ivec3(cell),ambient);
+    imageStore(directional_volume,ivec3(cell),directional);
+    atomicAdd(source_group_valid,1u);
+}
+
+void main() {
+    if (gl_LocalInvocationIndex == 0u) {
+        source_group_error = 0u;
+        source_group_invalid = 0u;
+        source_group_valid = 0u;
+    }
+    barrier();
+    source_process_voxel();
+    barrier();
+    if (gl_LocalInvocationIndex == 0u) {
+        uint c = p.meta.x;
+        if (source_group_error != 0u) atomicOr(status.row[c].counts.x, source_group_error);
+        if (source_group_invalid != 0u) atomicAdd(status.row[c].counts.y, source_group_invalid);
+        if (source_group_valid != 0u) atomicAdd(status.row[c].counts.z, source_group_valid);
+    }
+}
