@@ -34,6 +34,10 @@ def main():
     modes.add_argument('--lf-controls',action='store_true')
     modes.add_argument('--landscape-controls',action='store_true',help='Temporarily unshade only the uniquely identified Youxian landscape; diagnostic, not a fix')
     modes.add_argument('--landscape-specular-controls',action='store_true',help='Temporarily bypass only direct specular on the uniquely identified Youxian landscape; diagnostic, not a fix')
+    modes.add_argument('--landscape-cone-controls',action='store_true',help='Temporarily bypass only the local-cone correction on the uniquely identified Youxian landscape; diagnostic, not a fix')
+    modes.add_argument('--landscape-direct-controls',action='store_true',help='Compare original, directional-only, local-only, no-direct and restored accumulations on one landscape; diagnostic only')
+    modes.add_argument('--landscape-local-input-controls',action='store_true',help='Compare original, local count/color/attenuation/Lambert inputs and restored; diagnostic only')
+    modes.add_argument('--landscape-raw-count-controls',action='store_true',help='Compare original, neutral-output local light count, and restored; strict raw integer validation required')
     parser.add_argument('--direct-youxian',action='store_true')
     args=parser.parse_args()
     try:
@@ -48,16 +52,17 @@ def main():
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     command=[str(godot),'--path',str(root/'project'),'--resolution','960x540','--script',
         'res://scripts/verification/diagnostics/verify_tlv_drift.gd','--','--hide-ui','--tlv-out='+out.as_posix()]
-    for active,flag in ((args.shadow_controls,'--drift-shadow-controls'),(args.unshaded_controls,'--drift-unshaded-controls'),(args.lf_controls,'--drift-lf-controls'),(args.landscape_controls,'--drift-landscape-controls'),(args.landscape_specular_controls,'--drift-landscape-specular-controls'),(args.direct_youxian,'--map=youxian')):
+    for active,flag in ((args.shadow_controls,'--drift-shadow-controls'),(args.unshaded_controls,'--drift-unshaded-controls'),(args.lf_controls,'--drift-lf-controls'),(args.landscape_controls,'--drift-landscape-controls'),(args.landscape_specular_controls,'--drift-landscape-specular-controls'),(args.landscape_cone_controls,'--drift-landscape-cone-controls'),(args.landscape_direct_controls,'--drift-landscape-direct-controls'),(args.landscape_local_input_controls,'--drift-landscape-local-input-controls'),(args.landscape_raw_count_controls,'--drift-landscape-raw-count-controls'),(args.direct_youxian,'--map=youxian')):
         if active:command.append(flag)
     source_paths={root/rel for rel in FILES}
     for directory in ('project/source_tlv_candidate','project/source_water_distortion_candidate','project/native_distortion_candidate','project/source_separate_translucency'):
         source_paths.update(p for p in (root/directory).glob('*') if p.is_file() and p.suffix!='.uid')
     source_paths.update(p for p in (root/'tools/verification/drift').glob('*.py'))
-    if args.landscape_controls or args.landscape_specular_controls:
+    if args.landscape_controls or args.landscape_specular_controls or args.landscape_cone_controls or args.landscape_direct_controls or args.landscape_local_input_controls or args.landscape_raw_count_controls:
         source_paths.update(root/rel for rel in ('project/scripts/original_compiled_landscape.gd',
             'project/shaders/original_landscape_compiled.gdshader','project/scripts/original_source_renderer.gd',
-            'project/shaders/original_lightfunction_receiving.gdshaderinc','project/shaders/original_lightfunction_compiled.gdshaderinc'))
+            'project/shaders/original_lightfunction_receiving.gdshaderinc','project/shaders/original_lightfunction_compiled.gdshaderinc',
+            'project/source_lighting_candidate/original_local_cone.gdshaderinc','project/source_lighting_candidate/original_local_cone_adapter.gd'))
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(source_paths)}
     write(out/'input-sha256.json',hashes);write(out/'invocation.json',command)
     script=root/FILES[0]

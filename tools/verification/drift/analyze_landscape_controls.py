@@ -107,6 +107,7 @@ def load_capture(folder, expected_token):
 
 
 def material_review(run, control, variant='unshaded'):
+    need(variant in ('unshaded', 'no-direct-specular', 'no-local-cone'), 'Unsupported landscape control variant')
     landscape = control['landscape_control']
     need(landscape.get('control_variant', 'unshaded') == variant, 'Explicit control variant differs from GPU diagnostic')
     condition = 'landscape-'+variant
@@ -140,13 +141,25 @@ def material_review(run, control, variant='unshaded'):
         offset = declarations[0].end()-1
         expected = source[:offset]+', unshaded'+source[offset:]
         need(landscape.get('source_shader_preserved_except_render_mode') is True, 'Runtime inverse render_mode edit validation absent')
-    else:
+    elif variant == 'no-direct-specular':
         guard = 'if (nl > 0.0 && ROUGHNESS > 0.0) {'
         disabled = 'if (false && nl > 0.0 && ROUGHNESS > 0.0) {'
         addition = 'SPECULAR_LIGHT += radiance * distribution * visibility * fresnel * nl * SPECULAR_AMOUNT;'
         need(source.count(guard) == 1 and source.count(addition) == 1, 'Expected exactly one expanded direct-specular guard/addition')
         need(landscape.get('specular_guard_original') == guard and landscape.get('specular_guard_installed') == disabled, 'Specular guard metadata mismatch')
         need(landscape.get('source_shader_preserved_except_specular_guard') is True, 'Runtime inverse specular edit validation absent')
+        expected = source.replace(guard, disabled)
+    else:
+        guard = 'if (found < 0 || source_local_cone_position_kind[found].w < 0.5) return 1.0;'
+        disabled = 'if (true || found < 0 || source_local_cone_position_kind[found].w < 0.5) return 1.0;'
+        declaration = 'float source_local_cone_correction(vec3 fragment_world, vec3 world_light_ray) {'
+        call_site = 'source_local_cone_correction(source_lf_fragment_world, normalize((INV_VIEW_MATRIX * vec4(LIGHT,0.0)).xyz))'
+        need(source.count(guard) == 1 and source.count(declaration) == 1 and source.count(call_site) == 1, 'Expected exactly one expanded cone guard/function/call')
+        need(len(before) == 370 and len(target[0]['parameters']) == 70, 'Cone control differs from audited material/uniform count')
+        count = int(target[0]['parameters']['source_local_cone_count']['value'])
+        need(count > 0 and landscape.get('source_local_cone_count') == count, 'Cone binding inactive or metadata differs')
+        need(landscape.get('cone_guard_original') == guard and landscape.get('cone_guard_installed') == disabled, 'Cone guard metadata mismatch')
+        need(landscape.get('source_shader_preserved_except_cone_guard') is True, 'Runtime inverse cone edit validation absent')
         expected = source.replace(guard, disabled)
     need(expected.encode('utf-8') == installed, 'Shader changed beyond the single permitted control edit')
     need(digest(original) == landscape['original_shader_sha256'] == target[0]['shader_sha256'], 'Original shader hash mismatch')
@@ -255,7 +268,7 @@ def main():
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--helpers', type=Path, required=True, help='Checkout tools/verification/drift directory')
-    parser.add_argument('--control', choices=('unshaded', 'no-direct-specular'), default='unshaded', help='Explicit expected GPU control; default preserves historical unshaded analysis')
+    parser.add_argument('--control', choices=('unshaded', 'no-direct-specular', 'no-local-cone'), default='unshaded', help='Explicit expected GPU control; default preserves historical unshaded analysis')
     args = parser.parse_args()
     run, out, helpers = args.run.resolve(), args.out.resolve(), args.helpers.resolve()
     need(out != run and not out.is_relative_to(run), 'Output must be outside read-only source run')

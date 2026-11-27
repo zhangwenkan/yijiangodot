@@ -66,3 +66,8 @@
 更新后的`post-weight-refresh-cpu-v1`证据true但整体false：原态/恢复最早POST_OPAQUE各6/6对漂移，union82/54px、最大HDR差0.032958984375/0.0184326171875；仅地形unshaded全阶段和PNG exact，材质恢复及36/12份UBO分组保持。权重数据修正后漂移仍在，不能把不同run的像素数减少当因果改善。
 
 `specular-v1`正式wrapper实跑88.469秒exit0，引擎错误0/输入保持；唯一原地形最终shader只加false关闭直接镜面条件，独立diff一行。原/关镜面/恢复POST_OPAQUE分别5/6、6/6、6/6对漂移，union11/22/87px、最大HDR差0.0048828125/0.13427734375/0.050048828125；370材质/70uniform恢复、UBO分组、depth/accum保持，证据true但整体false。单独关镜面不足以消除漂移，不部署该关断；源DXBC的Fresnel缺口另为待测候选，不能当漂移修复。下一步继续局部cone/受光输入。四份小设置白名单提交，PNG/GLB/ctex和大报告不入Git。详见`docs/LANDSCAPE_PROGRESS_20261127.md`；旧失败全部保留，不宣称完整复原。
+
+
+2026-11-27局部灯继续定位：cone旁路仍漂；direct-v1仅方向灯/无直接灯全5类HDR与PNG exact，仅局部灯仍6/6变。local-input-v1四种常数/灯色/衰减/Lambert均漂，常数受ALBEDO/SH/雾影响不能直接当次数。raw-count-v1唯一地形加fog_disabled+ambient_light_disabled、末尾中性输出及每局部灯1/16，两镜面累加false；12捕获31.734秒exit0/无错误，370材质70参数恢复exact，生产shader未改。原/计数/恢复union159/779/32，仍整体失败。
+
+raw旧906跨run坐标复用失败必须保留：882符合数值编码、873深度exact；24数值invalid全在33跨run深度变化内。独立本run779点均四帧RGB相等且×16严格整数0–31（实0–8），最大变化6、depth/UBO相同；这只证实数值候选，不伪称GPU材质ID。源射线779首先命中源地形但LOD/压缩未重放，155保守内点仍非运行时归属证明。按源码推导tile32/zfar分组，存在同cluster、同源三角相邻像素序列不同，所以单纯整cluster列表变化不足以解释，后续查实际GPU buffer与执行路径。stock API无cluster RID，opaque为set1/binding9；未发现等价subgroup关闭配置，不裁灯。Probe创建不等于当前活跃，mode2 adapter已隐藏旧适配probe。详见docs/LANDSCAPE_PROGRESS_20261127.md及landscape-drift-20261127/{direct-cpu-v1,local-input-independent-v1,raw-count-cpu-v1,raw-count-independent-v1,raw-count-source-ownership-v1,cluster-access-review-v1}/。上游/折射UBO仍分组exact而非两组同值；旧失败与严格门槛保留。TLV/caster未默认启用，非完整复原或美术验收。

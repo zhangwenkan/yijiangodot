@@ -94,10 +94,12 @@ func landscape_verify_materials(states: Dictionary, target_id: int, installed: S
 		"target_control_active":installed!=null,"target_unshaded":installed!=null and report.landscape_control.control_variant=="unshaded","scope":"CPU-visible scene geometry references, material shaders/parameters and stored non-ShaderMaterial properties; not GPU uniform readback."})
 	return passed
 
-func run_landscape_controls(disable_direct_specular: bool=false) -> void:
-	var condition := "landscape-no-direct-specular" if disable_direct_specular else "landscape-unshaded"
+func run_landscape_controls(variant: String="unshaded") -> void:
+	if variant not in ["unshaded","no-direct-specular","no-local-cone","direct-series","local-input-series","raw-count"]:
+		check(false,"Unsupported landscape control variant"); return
+	var condition := "landscape-"+variant
 	report.landscape_control = {"scope":"One original Youxian landscape receives a temporary shader control; diagnosis, not a rendering fix or source UE equivalence.",
-		"control_variant":"no-direct-specular" if disable_direct_specular else "unshaded",
+		"control_variant":variant,
 		"expected_node":"OriginalLandscape_youxian","expected_material":"OriginalLandscape_Compiled_youxian",
 		"state_checks":[],"identification":[],"source_shader_preserved_except_render_mode":false}
 	var candidates: Array[MeshInstance3D] = []
@@ -132,9 +134,18 @@ func run_landscape_controls(disable_direct_specular: bool=false) -> void:
 	var unshaded := RegEx.new()
 	unshaded.compile("\\bunshaded\\b")
 	if unshaded.search(render_matches[0].get_string())!=null: check(false,"Landscape was already unshaded before control"); return
+	if variant=="raw-count":
+		await run_landscape_raw_count(target,states,target_state,code)
+		return
+	if variant=="local-input-series":
+		await run_landscape_local_input_series(target,states,target_state,code)
+		return
+	if variant=="direct-series":
+		await run_landscape_direct_series(target,states,target_state,code)
+		return
 	var at: int = render_matches[0].get_end()-1
 	var installed := Shader.new()
-	if disable_direct_specular:
+	if variant=="no-direct-specular":
 		# The source renderer expands the receiving include before this snapshot.
 		# Reject any unexpected shader instead of editing a shared source/include.
 		var guard := "if (nl > 0.0 && ROUGHNESS > 0.0) {"
@@ -146,6 +157,24 @@ func run_landscape_controls(disable_direct_specular: bool=false) -> void:
 		report.landscape_control.source_shader_preserved_except_specular_guard = installed.code.replace(disabled_guard,guard)==code
 		report.landscape_control.specular_guard_original = guard
 		report.landscape_control.specular_guard_installed = disabled_guard
+	elif variant=="no-local-cone":
+		# The cone adapter has already expanded its library in this material only.
+		# Force the existing correction guard to return one; keep all light inputs.
+		var guard := "if (found < 0 || source_local_cone_position_kind[found].w < 0.5) return 1.0;"
+		var disabled_guard := "if (true || found < 0 || source_local_cone_position_kind[found].w < 0.5) return 1.0;"
+		var declaration := "float source_local_cone_correction(vec3 fragment_world, vec3 world_light_ray) {"
+		var call_site := "source_local_cone_correction(source_lf_fragment_world, normalize((INV_VIEW_MATRIX * vec4(LIGHT,0.0)).xyz))"
+		check(code.count(guard)==1 and code.count(declaration)==1 and code.count(call_site)==1,"Landscape cone guard/function/call must occur exactly once in expanded runtime shader")
+		if code.count(guard)!=1 or code.count(declaration)!=1 or code.count(call_site)!=1: return
+		check(states.size()==370 and target_state.parameters.size()==70,"Cone control requires the audited 370 materials and 70 target uniforms")
+		if states.size()!=370 or target_state.parameters.size()!=70: return
+		check(int(target_state.parameters.get("source_local_cone_count",0))>0,"Cone control requires an active source local-cone binding")
+		if int(target_state.parameters.get("source_local_cone_count",0))<=0: return
+		installed.code = code.replace(guard,disabled_guard)
+		report.landscape_control.source_shader_preserved_except_cone_guard = installed.code.replace(disabled_guard,guard)==code
+		report.landscape_control.cone_guard_original = guard
+		report.landscape_control.cone_guard_installed = disabled_guard
+		report.landscape_control.source_local_cone_count = int(target_state.parameters.source_local_cone_count)
 	else:
 		installed.code = code.insert(at,", unshaded")
 		report.landscape_control.source_shader_preserved_except_render_mode = installed.code.substr(0,at)+installed.code.substr(at+", unshaded".length())==code
@@ -175,6 +204,220 @@ func run_landscape_controls(disable_direct_specular: bool=false) -> void:
 	for i in 4: await save_distortion("restored-%02d" % i)
 	landscape_verify_materials(states,target_id,null,"after-restored")
 	FileAccess.open(out.path_join("landscape-materials-restored.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(landscape_snapshot_materials()),"\t"))
+
+func run_landscape_direct_series(target: ShaderMaterial, states: Dictionary, target_state: Dictionary, code: String) -> void:
+	var target_id: int = target.get_instance_id()
+	check(states.size()==370 and target_state.parameters.size()==70,"Direct-light control requires 370 materials and 70 target uniforms")
+	if states.size()!=370 or target_state.parameters.size()!=70: return
+	var additions: Array[String] = [
+		"SPECULAR_LIGHT += radiance*leaf_wrap*leaf_scatter*source_leaf_subsurface;",
+		"DIFFUSE_LIGHT += radiance * (nl / PI);",
+		"SPECULAR_LIGHT += radiance * distribution * visibility * fresnel * nl * SPECULAR_AMOUNT;"]
+	var accumulation := RegEx.new()
+	accumulation.compile("\\b(?:DIFFUSE_LIGHT|SPECULAR_LIGHT)\\s*\\+=")
+	check(accumulation.search_all(code).size()==3,"Direct-light control requires exactly the three audited light accumulations")
+	if accumulation.search_all(code).size()!=3: return
+	for addition in additions:
+		check(code.count(addition)==1,"Expected unique original direct-light accumulation: "+addition)
+		if code.count(addition)!=1: return
+	var variants: Array[Dictionary] = [
+		{"name":"directional-only","guard":"LIGHT_IS_DIRECTIONAL"},
+		{"name":"local-only","guard":"!LIGHT_IS_DIRECTIONAL"},
+		{"name":"no-direct","guard":"false"}]
+	report.landscape_control["direct_variants"] = []
+	report.landscape_control["direct_accumulations"] = additions
+	report.landscape_control["original_shader_sha256"] = code.sha256_text()
+	report.landscape_control["target_material_id"] = target_id
+	report.landscape_control["material_count"] = states.size()
+	report.landscape_control["other_material_count"] = states.size()-1
+	report.landscape_control["source_evaluation_boundary"] = "Only the three accumulation statements are guarded. All source sampling/normal/LF/cone/IRRADIANCE code remains byte-identical. Static branch compilation may eliminate unused evaluation; identical GPU instruction execution is not asserted."
+	for variant in variants:
+		var installed_code := code
+		for addition in additions:
+			installed_code = installed_code.replace(addition,"if ("+str(variant.guard)+") { "+addition+" }")
+		var inverse := installed_code
+		for addition in additions:
+			inverse = inverse.replace("if ("+str(variant.guard)+") { "+addition+" }",addition)
+		check(inverse==code,"Direct-light control changed code outside three guards")
+		if inverse!=code: return
+		var shader := Shader.new()
+		shader.code = installed_code
+		variant["shader"] = shader
+		var filename := "landscape-runtime-"+str(variant.name)+".gdshader"
+		FileAccess.open(out.path_join(filename),FileAccess.WRITE).store_string(installed_code)
+		report.landscape_control.direct_variants.append({"name":variant.name,"guard":variant.guard,
+			"shader_file":filename,"shader_sha256":installed_code.sha256_text(),"source_preserved_except_accumulation_guards":inverse==code})
+	FileAccess.open(out.path_join("landscape-materials-before.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(states),"\t"))
+	FileAccess.open(out.path_join("landscape-runtime-original.gdshader"),FileAccess.WRITE).store_string(code)
+	for i in 4: await save_distortion("original-%02d" % i)
+	if not landscape_verify_materials(states,target_id,null,"after-original"): return
+	var previous: Shader = target_state.shader
+	for variant in variants:
+		if target.shader!=previous or target_state.shader.code.sha256_text()!=code.sha256_text():
+			check(false,"Direct-light control shader owner/source changed before next variant"); return
+		var shader: Shader = variant.shader
+		report.landscape_control.installed_shader_sha256 = shader.code.sha256_text()
+		target.shader = shader
+		for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+		await settle(20)
+		var condition := "landscape-"+str(variant.name)
+		landscape_verify_materials(states,target_id,shader,"before-"+condition)
+		for i in 4: await save_distortion(condition+"-%02d" % i)
+		landscape_verify_materials(states,target_id,shader,"after-"+condition)
+		previous = shader
+	if target.shader!=previous or target_state.shader.code.sha256_text()!=code.sha256_text():
+		check(false,"Direct-light control shader owner/source changed before restore"); return
+	target.shader = target_state.shader
+	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+	await settle(20)
+	landscape_verify_materials(states,target_id,null,"before-restored")
+	for i in 4: await save_distortion("restored-%02d" % i)
+	landscape_verify_materials(states,target_id,null,"after-restored")
+	FileAccess.open(out.path_join("landscape-materials-restored.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(landscape_snapshot_materials()),"\t"))
+
+
+func run_landscape_local_input_series(target: ShaderMaterial, states: Dictionary, target_state: Dictionary, code: String) -> void:
+	var target_id: int = target.get_instance_id()
+	check(states.size()==370 and target_state.parameters.size()==70,"Local-input control requires 370 materials and 70 target uniforms")
+	if states.size()!=370 or target_state.parameters.size()!=70: return
+	var diffuse := "DIFFUSE_LIGHT += radiance * (nl / PI);"
+	var specular: Array[String] = [
+		"SPECULAR_LIGHT += radiance*leaf_wrap*leaf_scatter*source_leaf_subsurface;",
+		"SPECULAR_LIGHT += radiance * distribution * visibility * fresnel * nl * SPECULAR_AMOUNT;"]
+	var accumulation := RegEx.new()
+	accumulation.compile("\\b(?:DIFFUSE_LIGHT|SPECULAR_LIGHT)\\s*\\+=")
+	check(accumulation.search_all(code).size()==3,"Local-input control requires exactly the three audited light accumulations")
+	if accumulation.search_all(code).size()!=3: return
+	check(code.count(diffuse)==1,"Expected unique original diffuse accumulation")
+	if code.count(diffuse)!=1: return
+	for addition in specular:
+		check(code.count(addition)==1,"Expected unique original specular accumulation: "+addition)
+		if code.count(addition)!=1: return
+	var variants: Array[Dictionary] = [
+		{"name":"local-count","expression":"vec3(1.0) / 16.0"},
+		{"name":"local-color","expression":"LIGHT_COLOR / PI"},
+		{"name":"local-attenuation","expression":"LIGHT_COLOR * ATTENUATION / PI"},
+		{"name":"local-lambert","expression":"LIGHT_COLOR * ATTENUATION * (nl / PI)"}]
+	report.landscape_control["local_input_variants"] = []
+	report.landscape_control["local_input_diffuse_original"] = diffuse
+	report.landscape_control["local_input_specular_original"] = specular
+	report.landscape_control["original_shader_sha256"] = code.sha256_text()
+	report.landscape_control["target_material_id"] = target_id
+	report.landscape_control["material_count"] = states.size()
+	report.landscape_control["other_material_count"] = states.size()-1
+	report.landscape_control["source_evaluation_boundary"] = "Only the three accumulation statements are replaced. Source sampling/normal/LF/cone/IRRADIANCE code and all uniforms remain unchanged. Static branches and unconsumed values may be optimized away; identical GPU instruction execution is not asserted."
+	for variant in variants:
+		var replacement := "if (!LIGHT_IS_DIRECTIONAL) { DIFFUSE_LIGHT += "+str(variant.expression)+"; }"
+		var installed_code := code.replace(diffuse,replacement)
+		for addition in specular: installed_code = installed_code.replace(addition,"if (false) { "+addition+" }")
+		var inverse := installed_code.replace(replacement,diffuse)
+		for addition in specular: inverse = inverse.replace("if (false) { "+addition+" }",addition)
+		check(inverse==code,"Local-input control changed code outside three accumulation statements")
+		if inverse!=code: return
+		var shader := Shader.new()
+		shader.code = installed_code
+		variant["shader"] = shader
+		var filename := "landscape-runtime-"+str(variant.name)+".gdshader"
+		FileAccess.open(out.path_join(filename),FileAccess.WRITE).store_string(installed_code)
+		report.landscape_control.local_input_variants.append({"name":variant.name,"diffuse_guard":"!LIGHT_IS_DIRECTIONAL",
+			"diffuse_expression":variant.expression,"diffuse_replacement":replacement,"specular_guard":"false",
+			"shader_file":filename,"shader_sha256":installed_code.sha256_text(),"source_preserved_except_accumulations":inverse==code})
+	FileAccess.open(out.path_join("landscape-materials-before.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(states),"\t"))
+	FileAccess.open(out.path_join("landscape-runtime-original.gdshader"),FileAccess.WRITE).store_string(code)
+	for i in 4: await save_distortion("original-%02d" % i)
+	if not landscape_verify_materials(states,target_id,null,"after-original"): return
+	var previous: Shader = target_state.shader
+	for variant in variants:
+		if target.shader!=previous or target_state.shader.code.sha256_text()!=code.sha256_text():
+			check(false,"Local-input control shader owner/source changed before next variant"); return
+		var shader: Shader = variant.shader
+		report.landscape_control.installed_shader_sha256 = shader.code.sha256_text()
+		target.shader = shader
+		for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+		await settle(20)
+		var condition := "landscape-"+str(variant.name)
+		landscape_verify_materials(states,target_id,shader,"before-"+condition)
+		for i in 4: await save_distortion(condition+"-%02d" % i)
+		landscape_verify_materials(states,target_id,shader,"after-"+condition)
+		previous = shader
+	if target.shader!=previous or target_state.shader.code.sha256_text()!=code.sha256_text():
+		check(false,"Local-input control shader owner/source changed before restore"); return
+	target.shader = target_state.shader
+	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+	await settle(20)
+	landscape_verify_materials(states,target_id,null,"before-restored")
+	for i in 4: await save_distortion("restored-%02d" % i)
+	landscape_verify_materials(states,target_id,null,"after-restored")
+	FileAccess.open(out.path_join("landscape-materials-restored.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(landscape_snapshot_materials()),"\t"))
+
+
+func run_landscape_raw_count(target: ShaderMaterial, states: Dictionary, target_state: Dictionary, code: String) -> void:
+	var target_id: int = target.get_instance_id()
+	check(states.size()==370 and target_state.parameters.size()==70,"Raw-count control requires 370 materials and 70 target uniforms")
+	if states.size()!=370 or target_state.parameters.size()!=70: return
+	var diffuse := "DIFFUSE_LIGHT += radiance * (nl / PI);"
+	var replacement := "if (!LIGHT_IS_DIRECTIONAL) { DIFFUSE_LIGHT += vec3(1.0) / 16.0; }"
+	var specular: Array[String] = [
+		"SPECULAR_LIGHT += radiance*leaf_wrap*leaf_scatter*source_leaf_subsurface;",
+		"SPECULAR_LIGHT += radiance * distribution * visibility * fresnel * nl * SPECULAR_AMOUNT;"]
+	var tail := "FOG = source_height_fog_to_godot(source_hf_result,false);\n}\r\n"
+	var output_override := "ALBEDO = vec3(1.0);\nMETALLIC = 0.0;\nSPECULAR = 0.0;\nEMISSION = vec3(0.0);\nIRRADIANCE = vec4(0.0,0.0,0.0,1.0);\nRADIANCE = vec4(0.0,0.0,0.0,1.0);\n"
+	var injected_tail := tail.substr(0,tail.length()-3)+output_override+"}\r\n"
+	var accumulation := RegEx.new()
+	accumulation.compile("\\b(?:DIFFUSE_LIGHT|SPECULAR_LIGHT)\\s*\\+=")
+	check(accumulation.search_all(code).size()==3 and code.count(diffuse)==1,"Raw-count control requires exactly three audited accumulations")
+	if accumulation.search_all(code).size()!=3 or code.count(diffuse)!=1: return
+	check(code.count("void fragment() {")==1 and code.count(tail)==1 and code.ends_with(tail),"Raw-count fragment must end at the unique audited FOG tail")
+	if code.count("void fragment() {")!=1 or code.count(tail)!=1 or not code.ends_with(tail): return
+	for addition in specular:
+		check(code.count(addition)==1,"Expected unique raw-count specular accumulation")
+		if code.count(addition)!=1: return
+	var render_mode := RegEx.new()
+	render_mode.compile("(?m)^render_mode\\s+[^;]+;")
+	var declarations := render_mode.search_all(code)
+	check(declarations.size()==1 and not "fog_disabled" in declarations[0].get_string() and not "ambient_light_disabled" in declarations[0].get_string(),"Raw-count requires one original fog/ambient-enabled render_mode")
+	if declarations.size()!=1 or "fog_disabled" in declarations[0].get_string() or "ambient_light_disabled" in declarations[0].get_string(): return
+	var original_mode: String = declarations[0].get_string()
+	var installed_mode := original_mode.substr(0,original_mode.length()-1)+", fog_disabled, ambient_light_disabled;"
+	var installed_code := code.replace(original_mode,installed_mode).replace(tail,injected_tail).replace(diffuse,replacement)
+	for addition in specular: installed_code = installed_code.replace(addition,"if (false) { "+addition+" }")
+	var inverse := installed_code.replace(installed_mode,original_mode).replace(injected_tail,tail).replace(replacement,diffuse)
+	for addition in specular: inverse = inverse.replace("if (false) { "+addition+" }",addition)
+	check(inverse==code,"Raw-count changed source beyond audited render_mode, fragment outputs and accumulations")
+	if inverse!=code: return
+	var installed := Shader.new()
+	installed.code = installed_code
+	report.landscape_control["raw_count"] = {"diffuse_original":diffuse,"diffuse_replacement":replacement,"specular_original":specular,
+		"fragment_tail_original":tail,"fragment_tail_installed":injected_tail,"output_override":output_override,
+		"render_mode_original":original_mode,"render_mode_installed":installed_mode,"inverse_source_exact":inverse==code,
+		"count_scale":16,"count_min":0,"count_max":31,"scope":"Candidate local-light invocation count; unchanged other materials are not count data. Exact RGB/integer validation must succeed on captured post-opaque HDR before interpreting counts."}
+	report.landscape_control["original_shader_sha256"] = code.sha256_text()
+	report.landscape_control["installed_shader_sha256"] = installed_code.sha256_text()
+	report.landscape_control["target_material_id"] = target_id
+	report.landscape_control["material_count"] = states.size()
+	report.landscape_control["other_material_count"] = states.size()-1
+	report.landscape_control["source_evaluation_boundary"] = "All normal, roughness, source LF/cone and texture evaluation source remains unchanged. Constant output overrides and static guards may remove unused compiled evaluation; identical GPU instruction execution is not asserted."
+	FileAccess.open(out.path_join("landscape-materials-before.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(states),"\t"))
+	FileAccess.open(out.path_join("landscape-runtime-original.gdshader"),FileAccess.WRITE).store_string(code)
+	FileAccess.open(out.path_join("landscape-runtime-raw-count.gdshader"),FileAccess.WRITE).store_string(installed_code)
+	for i in 4: await save_distortion("original-%02d" % i)
+	if not landscape_verify_materials(states,target_id,null,"after-original"): return
+	target.shader = installed
+	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+	await settle(20)
+	landscape_verify_materials(states,target_id,installed,"before-landscape-raw-count")
+	for i in 4: await save_distortion("landscape-raw-count-%02d" % i)
+	landscape_verify_materials(states,target_id,installed,"after-landscape-raw-count")
+	if target.shader!=installed or target_state.shader.code.sha256_text()!=code.sha256_text():
+		check(false,"Raw-count shader owner/source changed before restore"); return
+	target.shader = target_state.shader
+	for key in target_state.parameters: target.set_shader_parameter(key,target_state.parameters[key])
+	await settle(20)
+	landscape_verify_materials(states,target_id,null,"before-restored")
+	for i in 4: await save_distortion("restored-%02d" % i)
+	landscape_verify_materials(states,target_id,null,"after-restored")
+	FileAccess.open(out.path_join("landscape-materials-restored.json"),FileAccess.WRITE).store_string(JSON.stringify(landscape_material_records(landscape_snapshot_materials()),"\t"))
+
 
 func snapshot_light_function_uniforms() -> Array[Dictionary]:
 	var saved: Array[Dictionary] = []
@@ -243,7 +486,7 @@ func save_distortion(label: String) -> void:
 	check(not data.is_empty(),label+": missing distortion readback")
 	check(stages.all(func(d): return not d.is_empty()),label+": missing upstream readback")
 	if data.is_empty(): return
-	if ("--drift-landscape-controls" in OS.get_cmdline_user_args() or "--drift-landscape-specular-controls" in OS.get_cmdline_user_args()) and stages.all(func(d): return not d.is_empty()):
+	if ("--drift-landscape-controls" in OS.get_cmdline_user_args() or "--drift-landscape-specular-controls" in OS.get_cmdline_user_args() or "--drift-landscape-cone-controls" in OS.get_cmdline_user_args() or "--drift-landscape-direct-controls" in OS.get_cmdline_user_args() or "--drift-landscape-local-input-controls" in OS.get_cmdline_user_args() or "--drift-landscape-raw-count-controls" in OS.get_cmdline_user_args()) and stages.all(func(d): return not d.is_empty()):
 		for stage in stages:
 			check(stage.get("token",-1)==report.captures.size(),label+": upstream token mismatch")
 			check(stage.get("drawn_frame",-1)==stages[0].get("drawn_frame",-2),label+": upstream stages differ in drawn frame")
@@ -285,7 +528,7 @@ func run() -> void:
 	DirAccess.make_dir_recursive_absolute(out)
 	report = {"maps":[],"captures":[],"failures":[],"scope":"Youxian default frozen distortion stage localization; no production changes; final PNG is a later frame than the same-callback HDR triplet."}
 	var control_count := 0
-	for flag in ["--drift-lf-controls","--drift-unshaded-controls","--drift-shadow-controls","--drift-landscape-controls","--drift-landscape-specular-controls"]:
+	for flag in ["--drift-lf-controls","--drift-unshaded-controls","--drift-shadow-controls","--drift-landscape-controls","--drift-landscape-specular-controls","--drift-landscape-cone-controls","--drift-landscape-direct-controls","--drift-landscape-local-input-controls","--drift-landscape-raw-count-controls"]:
 		if flag in OS.get_cmdline_user_args(): control_count += 1
 	if control_count>1:
 		check(false,"Drift control modes are mutually exclusive")
@@ -322,8 +565,18 @@ func run() -> void:
 	effects.append(stage_effects[2])
 	diagnostic_compositor.compositor_effects = effects
 	scene.camera.compositor = diagnostic_compositor
-	if "--drift-landscape-controls" in OS.get_cmdline_user_args() or "--drift-landscape-specular-controls" in OS.get_cmdline_user_args():
-		await run_landscape_controls("--drift-landscape-specular-controls" in OS.get_cmdline_user_args())
+	if "--drift-landscape-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("unshaded")
+	elif "--drift-landscape-specular-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("no-direct-specular")
+	elif "--drift-landscape-cone-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("no-local-cone")
+	elif "--drift-landscape-direct-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("direct-series")
+	elif "--drift-landscape-local-input-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("local-input-series")
+	elif "--drift-landscape-raw-count-controls" in OS.get_cmdline_user_args():
+		await run_landscape_controls("raw-count")
 	elif "--drift-lf-controls" in OS.get_cmdline_user_args():
 		var materials := snapshot_light_function_uniforms()
 		report.lf_materials = materials.size()

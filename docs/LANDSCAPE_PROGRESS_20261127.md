@@ -107,6 +107,54 @@ python tools/verification/run_source_tlv_drift.py --landscape-specular-controls 
 python tools/verification/drift/analyze_landscape_controls.py --run workbench/reports/landscape-specular-new/gpu --out workbench/reports/landscape-specular-new/cpu --helpers tools/verification/drift --control no-direct-specular
 ```
 
-两个 landscape 控制选项互斥，均已通过正式 wrapper 实际采集。分析器严格拒绝缺失/重复捕获、阶段不齐、原始尺寸或哈希不符及材料恢复失败。帮助/AST、本轮实际 12 捕获的独立复算均完成；合成负例覆盖以对应分析器测试记录为准，早期 unshaded 分析轮没有执行缺失负例。分析器返回 1 可以表示证据完整但精确冻结比较失败，应同时查看分项结果。
+所有 landscape 控制选项互斥，均已通过正式 wrapper 实际采集。分析器严格拒绝缺失/重复捕获、阶段不齐、原始尺寸或哈希不符及材料恢复失败。帮助/AST、本轮实际 12 捕获的独立复算均完成；合成负例覆盖以对应分析器测试记录为准，早期 unshaded 分析轮没有执行缺失负例。分析器返回 1 可以表示证据完整但精确冻结比较失败，应同时查看分项结果。
 
 本地证据根为 `workbench/reports/landscape-drift-20261127/` 与 `workbench/reports/landscape-weights-20261127/`。独立导入 A/B 与地形分析已归档；本次 233 + 169 项生产 CPU 复核已归档到后者的 `cpu-production-review-v1/`，负例输入另存 `verifier-negative-input-v2/`，不进入 Git。此前所有冻结失败与错误时间切片记录继续保留。
+
+## 局部直接灯路径与严格计数诊断
+
+继续完成 `cone-v1`、`direct-v1`、`local-input-v1` 与 `raw-count-v1`，均为唯一游仙原地形的临时运行时 shader 控制，默认受光代码、模型和资产未改。原态与恢复条件仍漂，不能把以下诊断关闭项当成生产修复。
+
+| 运行与条件 | POST_OPAQUE 变化对 | 变化像素并集 | 最大 HDR 差 |
+|---|---:|---:|---:|
+| cone：原态 / 旁路局部 cone / 恢复 | 6/6、6/6、6/6 | 44 / 74 / 79 | .0050048828125 / .0048828125 / .105224609375 |
+| direct：原态 / 仅方向灯 / 仅局部灯 / 无直接灯 / 恢复 | 6/6、0/6、6/6、0/6、6/6 | 27 / 0 / 135 / 0 / 17 | .004638671875 / 0 / .011962890625 / 0 / .0047607421875 |
+| local-input：原态 / 常数 / 灯色 / 衰减 / Lambert / 恢复 | 全部 6/6 | 93 / 906 / 1148 / 135 / 129 / 36 | .01171875 / .110595703125 / 16450 / .057373046875 / .022216796875 / .0218505859375 |
+| raw-count：原态 / 中性输出计数 / 恢复 | 全部 6/6 | 159 / 779 / 32 | .0084228515625 / .375 / .011962890625 |
+
+各运行耗时 105.657 / 42.468 / 46.578 / 31.734 秒，退出 0、引擎错误 0、输入哈希保持。`direct-v1` 的仅方向灯和无直接灯条件所有五类 HDR 及最终 PNG 均 exact，将当前调查收窄到地形局部灯相关路径。静态 guard 会允许编译器删除无用计算，不能据源码保留宣称 GPU 指令完全相同。
+
+`local-input` 保留原 ALBEDO/环境/雾，仅改变局部直接光累加表达式，常数条件尚不是无污染调用次数。灯色条件的 16450 是去掉衰减后的有限 HDR 最大差，不是原版正常光照误差。独立原始重算 24 帧、120 HDR、24 PNG 与主报告统计零差；原态与灯色 PNG 为 5/6 对变化，其余为 6/6。资料：`local-input-independent-v1/`。
+
+`raw-count` 仍保留直接受光循环，仅对该地形增加 `fog_disabled, ambient_light_disabled`，fragment 末尾覆盖 ALBEDO=1、METALLIC/SPECULAR/EMISSION=0、IRRADIANCE/RADIANCE=黑色且 alpha=1；两处直接镜面累加禁用，局部漫反射每次精确增加 1/16。原 NORMAL 源码保留，GPU 编译优化边界同上。该模式不改共享 shader include、灯节点或默认生产效果。脚本解析 0.485 秒通过；370 材质、70 参数、完整前后快照与原 shader 恢复通过。
+
+旧 906 坐标的跨运行复用检查**失败并保留**：882 点四帧符合 RGB 相等、乘 16 为 0–31 整数；873 点深度与旧 run exact。24 个数值不合格点全部位于 33 个跨 run 深度变化点内，不能把它们强归地形或放宽门槛。`raw-count-cpu-v1` 的 evidence=false、overall=false。分析器真实子进程返回 2；默认 PowerShell 尾部 native 失败曾被外层显示为 1，独立 subprocess 已核明，工具不需因此改返回逻辑。
+
+另对**本次运行自身**779 个 POST_OPAQUE 变化像素做独立复算：779/779 的四帧 RGB 严格相等，乘 16 都为精确整数，实际计数 0–8、26 种四帧序列、最大变化 6。四帧完整 depth/UBO exact。这是当前输出的数值事实，不将其用来改写旧坐标复用失败，也不以灰度整数单独证明运行时材质 ID。独立报告和空间图：`raw-count-independent-v1/`。
+
+同 run 的源 GLB 射线检查中，779 条射线均首先命中源地形，源命中与保存深度残差最大 1.874442 cm；285 点残差≤1 mm，进一步要求距投影三角边≥0.5 px、1 cm 内无源非地形、次地形间距>1 cm 后有155个保守候选。实际导入启用压缩/LOD，GPU primitive/material ID 未取得，所以保持 runtime_ownership_proven=false，不把源候选当成运行时精确归属。记录：`raw-count-source-ownership-v1/`；旧906的独立源审查留在 `local-count-source-ownership-v1/`。
+
+官方本地引擎源码推导 cluster tile=32/shift=5，本次 scene UBO z_far=1800.23046875；尚未读取实际 implementation/cluster buffer。779 点占71个 tile+z 分组，其中21组内部四帧序列不相同；155保守候选中的29组有6组内部不同。三个同源三角的相邻像素例：
+
+| 像素 A / 次数 | 像素 B / 次数 | 推导 cluster | 源三角 |
+|---|---|---|---:|
+| (448,167) / 0,0,1,1 | (448,168) / 0,1,1,1 | (14,5,1) | 242861 |
+| (126,251) / 0,1,0,0 | (126,252) / 1,1,0,0 | (3,7,0) | 233021 |
+| (9,255) / 1,0,0,0 | (10,255) / 1,0,1,1 | (0,7,0) | 228486 |
+
+在相同运行时地形/层掩码/cluster等前提成立时，仅“整份 cluster 灯列表随帧变”不能解释同组的像素差异。仍需 GPU 缓冲和实际着色器执行证据，不据此归因驱动错误。stock 脚本 API 未暴露内部 cluster RID；源码真实 opaque 绑定位为 set1/binding9。未找到保留当前灯路径而仅禁用 subgroup 的真实配置；不能用裁灯容量或切渲染器冒充等价控制。相关源码与接口审查：`cluster-access-review-v1/`。原适配 ReflectionProbe 已被 mode2 adapter 隐藏，环境创建代码不能当成其当前活跃证据。
+
+所有运行仍分别核对上游与折射 UBO：cone/raw 各36/12份，direct为60/20份，local-input为72/24份，各自组内exact；两类之间byte2700恒定15/7，不合称全部一致。各次depth/accum跨条件exact，370/70材料恢复保持。PNG晚于同回调HDR，不称同帧。局部cone、直接光拆分、输入拆分和计数均是显式诊断；TLV/caster仍未接入默认行走，完整复原未完成。
+
+新增复跑入口（新输出目录，原exact门槛不变）：
+
+```powershell
+python tools/verification/run_source_tlv_drift.py --direct-youxian --landscape-direct-controls --out workbench/reports/new-direct/gpu --timeout 240
+python tools/verification/drift/analyze_landscape_direct_controls.py --run workbench/reports/new-direct/gpu --out workbench/reports/new-direct/cpu --helpers tools/verification/drift --control direct-series
+python tools/verification/run_source_tlv_drift.py --direct-youxian --landscape-local-input-controls --out workbench/reports/new-local-input/gpu --timeout 240
+python tools/verification/drift/analyze_landscape_local_input_controls.py --run workbench/reports/new-local-input/gpu --out workbench/reports/new-local-input/cpu --helpers tools/verification/drift --control local-input-series
+python tools/verification/run_source_tlv_drift.py --direct-youxian --landscape-raw-count-controls --out workbench/reports/new-raw-count/gpu --timeout 240
+python tools/verification/drift/analyze_landscape_raw_count.py --run workbench/reports/new-raw-count/gpu --out workbench/reports/new-raw-count/cpu --helpers tools/verification/drift --control raw-count --prior-count-samples workbench/reports/landscape-drift-20261127/local-input-cpu-v1/landscape-local-count/postopaque-world-samples.json
+```
+
+raw-count 的旧样本参数有意做严格跨run有效性审查，可能因可见表面改变而拒绝，不能为了出通过结果删掉失败坐标。本轮核心工具、小文档纳入Git，大报告、捕获原始缓冲及原资产继续仅本地保存。
