@@ -27,6 +27,7 @@ var _camera_projection: Array = []
 var _house: Node
 var _rescan_casters := false
 var _diagnostic_directory := ""
+var cpu_stage_timing: RefCounted
 
 func install(scene: Node3D, map_slug: String, options: Dictionary = {}) -> Dictionary:
 	if _running or _bridge!=null: return {"status":"failed","error":"Already installed; create a new owner after stop."}
@@ -51,6 +52,7 @@ func install(scene: Node3D, map_slug: String, options: Dictionary = {}) -> Dicti
 		_probes.queue_free(); _probes=null; _bridge=null
 		return {"status":"failed","error":probe_result.error}
 	_caster=preload("res://source_tlv_realtime/dynamic_caster_binding.gd").new()
+	_caster.cpu_stage_timing=cpu_stage_timing
 	_caster.restore_on_exit_tree=false
 	add_child(_caster)
 	var caster_result: Dictionary = _caster.install(scene,scene.camera,0xFFFFF,false,true)
@@ -91,8 +93,18 @@ func _projection_signature() -> Array:
 		camera.get_viewport().get_visible_rect().size]
 
 func _pre_draw() -> void:
+	if cpu_stage_timing == null:
+		_cpu_body__pre_draw()
+		return
+	var cpu_span: int = _cpu_begin("producer_pre_draw", {})
+	_cpu_body__pre_draw()
+	_cpu_end(cpu_span)
+
+func _cpu_body__pre_draw() -> void:
 	if not _running: return
+	var cpu_take_events: int = _cpu_begin("take_events")
 	var events: Array[Dictionary] = _bridge.take_events()
+	_cpu_end(cpu_take_events)
 	# A failed initialization can enqueue fatal and closed in the same batch.
 	# Retain cleanup evidence before a fatal branch ends normal processing.
 	for event in events:
@@ -121,18 +133,28 @@ func _pre_draw() -> void:
 		# A house transition toggles whole actor groups. Drain the old pair before
 		# rescanning newly-visible potential casters under the same template rules.
 		if not _inflight.is_empty(): return
+		_cpu_event("rescan_begin")
 		if _receiver!=null:
+			var cpu_receiver_restore: int = _cpu_begin("receiver_restore")
 			var receiver_restored: Dictionary = _receiver.restore()
+			_cpu_end(cpu_receiver_restore)
 			if not receiver_restored.errors.is_empty(): stop("Receiver rescan owner conflict: "+str(receiver_restored)); return
 			_receiver.queue_free()
 			_receiver=null
+		var cpu_caster_restore: int = _cpu_begin("caster_restore")
 		var restored: Dictionary = _caster.restore()
+		_cpu_end(cpu_caster_restore)
 		if not restored.errors.is_empty(): stop("Caster rescan owner conflict: "+str(restored)); return
+		var cpu_caster_install: int = _cpu_begin("caster_install")
 		var rescanned: Dictionary = _caster.install(_scene,camera,0xFFFFF,false,true)
+		_cpu_end(cpu_caster_install)
 		if rescanned.get("status")!="installed": stop("Caster rescan rejected: "+str(rescanned)); return
 		_rescan_casters=false
 		report.caster=rescanned
+		_cpu_event("rescan_end")
+	var cpu_caster_prepare: int = _cpu_begin("caster_prepare")
 	var errors: Array[String] = _caster.prepare_snapshot(camera)
+	_cpu_end(cpu_caster_prepare)
 	if not errors.is_empty():
 		stop("Caster owner/camera failed: "+str(errors))
 		return
@@ -145,7 +167,9 @@ func _pre_draw() -> void:
 		_owner_generation+=1
 		_invalidate("Camera teleport/large turn.")
 	_last_pose=pose
+	var cpu_light_pre: int = _cpu_begin("light_snapshot_pre")
 	var light: Dictionary = _probes.snapshot_light()
+	_cpu_end(cpu_light_pre)
 	if light.has("error"):
 		_invalidate(str(light.error))
 		return
@@ -165,7 +189,9 @@ func _pre_draw() -> void:
 	if slot_index<0: return
 	var size := camera.get_viewport().get_visible_rect().size
 	if size.y<=0.0: _invalidate("Empty viewport."); return
+	var cpu_volume_bounds: int = _cpu_begin("volume_bounds")
 	var bounds := BOUNDS.from_camera(camera,size.x/size.y)
+	_cpu_end(cpu_volume_bounds)
 	_snapshot_serial+=1
 	if _snapshot_serial>=0xFFFFFFFF:
 		stop("Snapshot uint32 exhausted; reinstall with a new owner.")
@@ -177,11 +203,16 @@ func _pre_draw() -> void:
 		"bounds":bounds,"probe_masks":[_probes.cameras[0].cull_mask,_probes.cameras[1].cull_mask]})
 	_slots[slot_index].token=_snapshot_serial
 	_inflight=snapshot
+	_cpu_event("new_request",{"snapshot_id":_snapshot_serial})
 	report.request_history.append({"snapshot_id":_snapshot_serial,"request_frame":frame,"slot":slot_index,
 		"install_generation":_install_generation,"house_generation":_house_generation,"owner_generation":_owner_generation})
 	if report.request_history.size()>256: report.request_history.pop_front()
+	var cpu_bridge_begin: int = _cpu_begin("bridge_begin")
 	_bridge.begin(snapshot)
+	_cpu_end(cpu_bridge_begin)
+	var cpu_probe_arm: int = _cpu_begin("probe_arm")
 	var arm_error: String = _probes.arm(snapshot)
+	_cpu_end(cpu_probe_arm)
 	if not arm_error.is_empty(): _bridge.abandon(_snapshot_serial,arm_error)
 	report.status="producing"
 
@@ -226,15 +257,26 @@ func _status_error(event: Dictionary) -> String:
 	return ""
 
 func _complete(event: Dictionary) -> void:
+	if cpu_stage_timing == null:
+		_cpu_body__complete(event)
+		return
+	var cpu_span: int = _cpu_begin("producer_complete", {"snapshot_id":int(event.snapshot.snapshot_id),"snapshot_house_generation":int(event.snapshot.house_generation)})
+	_cpu_body__complete(event)
+	_cpu_end(cpu_span)
+
+func _cpu_body__complete(event: Dictionary) -> void:
 	var snapshot: Dictionary = event.snapshot
 	var token: int = snapshot.snapshot_id
 	if _inflight.is_empty() or int(_inflight.snapshot_id)!=token:
 		_release(snapshot)
 		return
 	_inflight={}
+	_cpu_event("inflight_cleared",{"snapshot_id":token,"snapshot_house_generation":int(snapshot.house_generation),"snapshot_owner_generation":int(snapshot.owner_generation)})
 	var reason := _status_error(event)
 	var frame := Engine.get_frames_drawn()
+	var cpu_light_snapshot_complete: int = _cpu_begin("light_snapshot_complete")
 	var current_light: Dictionary = _probes.snapshot_light()
+	_cpu_end(cpu_light_snapshot_complete)
 	if reason.is_empty() and (current_light.has("error") or int(current_light.get("light_fingerprint",0))!=int(snapshot.light_fingerprint)):
 		reason="Source light/LF changed before publication."
 	if reason.is_empty() and not _fresh(snapshot,frame): reason="Stale generation/age/camera coverage."
@@ -260,14 +302,19 @@ func _complete(event: Dictionary) -> void:
 	if _receiver_enabled:
 		if _receiver==null:
 			_receiver=preload("res://source_tlv_realtime/snapshot_receiver.gd").new()
+			_receiver.cpu_stage_timing=cpu_stage_timing
 			_receiver.restore_on_exit_tree=false
 			add_child(_receiver)
+			var cpu_receiver_install: int = _cpu_begin("receiver_install")
 			var installed: Dictionary = _receiver.install_snapshot(_scene,snapshot,textures)
+			_cpu_end(cpu_receiver_install)
 			if installed.get("status")!="installed":
 				_release(snapshot)
 				stop("Receiver installation failed: "+str(installed))
 				return
+		var cpu_receiver_publish: int = _cpu_begin("receiver_publish")
 		var published: Dictionary = _receiver.publish(snapshot,textures)
+		_cpu_end(cpu_receiver_publish)
 		if not bool(published.get("updated",false)):
 			_release(snapshot)
 			stop("Receiver complete-snapshot publication failed: "+str(published))
@@ -275,6 +322,7 @@ func _complete(event: Dictionary) -> void:
 		report.published=int(report.published)+1
 	var previous: Dictionary = _active
 	_active=snapshot
+	_cpu_event("accepted_publication",{"snapshot_id":token,"snapshot_house_generation":int(snapshot.house_generation),"snapshot_owner_generation":int(snapshot.owner_generation)})
 	if not previous.is_empty(): _release(previous)
 	report.produced=int(report.produced)+1
 	report.last_snapshot={"snapshot_id":token,"produced_frame":event.frames[0],"accepted_frame":frame,
@@ -290,19 +338,41 @@ func _release(snapshot: Dictionary) -> void:
 	_slots[slot].token=-1
 
 func _invalidate(reason: String) -> void:
-	if _receiver!=null: _receiver.set_mode(0)
+	if cpu_stage_timing == null:
+		_cpu_body__invalidate(reason)
+		return
+	var cpu_span: int = _cpu_begin("producer_invalidate", {"reason":reason})
+	_cpu_body__invalidate(reason)
+	_cpu_end(cpu_span)
+
+func _cpu_body__invalidate(reason: String) -> void:
+	if _receiver!=null:
+		var cpu_fallback: int = _cpu_begin("receiver_fallback_mode")
+		_receiver.set_mode(0)
+		_cpu_end(cpu_fallback)
 	if not _active.is_empty():
 		_release(_active)
 		_active={}
 	if not _inflight.is_empty():
+		var cpu_cancel: int = _cpu_begin("cancel_submit")
 		_probes.cancel(int(_inflight.snapshot_id))
 		_bridge.abandon(int(_inflight.snapshot_id),reason)
+		_cpu_end(cpu_cancel)
 	_log({"fallback":"original sun","reason":reason,"frame":Engine.get_frames_drawn()})
 
 func _on_house_state(inside: bool) -> void:
+	if cpu_stage_timing == null:
+		_cpu_body__on_house_state(inside)
+		return
+	var cpu_span: int = _cpu_begin("producer_house_signal", {"requested_inside":inside})
+	_cpu_body__on_house_state(inside)
+	_cpu_end(cpu_span)
+
+func _cpu_body__on_house_state(inside: bool) -> void:
 	_inside=inside
 	_house_generation+=1
 	_rescan_casters=true
+	_cpu_event("house_invalidated",{"drain_required":not _inflight.is_empty(),"inflight_token":int(_inflight.get("snapshot_id",-1))})
 	_invalidate("House state changed after source lighting update.")
 
 func invalidate_owner(reason: String) -> void:
@@ -388,3 +458,27 @@ func retry_restore_shutdown() -> Dictionary:
 			report.stop.gpu_cleanup="queued; asynchronous completion still required"
 	report.status="stopped" if receiver_restore.errors.is_empty() and caster_restore.errors.is_empty() and probe_restore.errors.is_empty() else "restore_conflict"
 	return report.stop
+
+func _cpu_context() -> Dictionary:
+	return {"map":_map_slug,"inside":_inside,"house_generation":_house_generation,
+		"owner_generation":_owner_generation,"install_generation":_install_generation,
+		"inflight_snapshot_id":int(_inflight.get("snapshot_id",-1)),
+		"active_snapshot_id":int(_active.get("snapshot_id",-1)),
+		"rescan_pending":_rescan_casters,"producer_status":str(report.get("status","")),
+		"caster_bound":_caster._saved.size() if is_instance_valid(_caster) else 0,
+		"receiver_bound":_receiver._saved.size() if is_instance_valid(_receiver) else 0}
+
+func _cpu_begin(stage: String, extra: Dictionary = {}) -> int:
+	if cpu_stage_timing == null: return -1
+	var context := _cpu_context()
+	context.merge(extra,true)
+	return cpu_stage_timing.begin_span(stage,context)
+
+func _cpu_end(span: int) -> void:
+	if cpu_stage_timing != null: cpu_stage_timing.end_span(span)
+
+func _cpu_event(stage: String, extra: Dictionary = {}) -> void:
+	if cpu_stage_timing == null: return
+	var context := _cpu_context()
+	context.merge(extra,true)
+	cpu_stage_timing.record_event(stage,context)

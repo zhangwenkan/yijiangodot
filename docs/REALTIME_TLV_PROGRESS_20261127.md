@@ -114,3 +114,41 @@ V4 独立静审十七项正反检查与重跑作者二十三项 fixture 通过�
 实时太阳候选尚未接默认试玩；局部灯体积、原 UE 阴影等价、两图全地图连续行走和最终画面、可见阴影与风动画的时刻关系、GPU epoch 一致消费、长期运行/切地图资源行为和可接受性能均未完成。本轮只封存可审代码与阶段证据，后续性能优化独立推进，不代表完整功能、完整复原或用户美术验收。文档封存前最近远端只读核对仍为 `18b0c3b`，本轮 Git 推送尚未发生；后续实际同步结果另记，审批超时或网络读取失败不能记为已同步。
 
 原始运行与完整捕获保留在 `workbench/reports/landscape-drift-20261127/` 下对应 sidecar、pair、receiver frozen/normal、house-route/house-baseline 及 wrapper/deployment 目录。前三项完整独立 CPU 已归档为 `realtime-sidecar-cpu-v1`、`realtime-pair-cpu-v2`、`realtime-sidecar-youxian-cpu-v2`；V2 包含 47 文件及完整差异，游仙包为 17 文件。V3 独立 25 文件归档为 `realtime-receiver-independent-cpu-v3`，作者报告和对照面板位于 `realtime-receiver-v3-results`。连续穿门与 baseline 的三十、二十三文件独审包已归档为 `realtime-house-route-independent-cpu-v1`、`realtime-house-baseline-independent-cpu-v1`。V4 新 pair 的三十六文件、无名与游仙各二十九文件独审包归档为 `realtime-pair-independent-cpu-v4`、`realtime-house-route-independent-cpu-v4`、`realtime-house-youxian-independent-cpu-v4`，保留各自版本的数值、路线和限制。具体路径/哈希由本包 evidence manifest 记录。Git 仅纳入十四个实时源码、一份穿门诊断和本篇/AGENTS 两文档；大体积 rgba16f、差异 NPZ、GPU UBO、资产、缓存和引擎不混入核心提交，归档保存另用明确清单。
+
+
+## 2026-11-28：室内外切换的 CPU 计时与文本处理
+
+本节的 CPU 计时 V1/V2/V3、CPU 文本优化 V4 是新一轮编号，与上节两个计算 Shader 的 GPU 工作组归约 V4 不同。后者保持部署。本轮只改主线程诊断及纯文本处理，未改太阳体积公式、raw/filter 舍入、纹理写入、Shader 受光公式、模型或原镜头。没有因为本轮改动重跑完整体素数值取样，也不能将旧数值报告写成新一轮实测。默认试玩仍关闭实时 TLV receiver；新增详细计时仅由显式 `--tlv-stage-timing` 开启。
+
+计时记录每段同步函数的单调时钟、实际 draw/physics 帧及父子关系，另记房屋失效、旧任务清空、重扫描和新组可用事件。默认不创建 recorder，不采集计时；文本优化仍在显式安装时生效；启用后只在内存保留有界记录，案例结束后统一导出。同步时间包含函数中的等待与调度，不是 CPU 核活跃时间或 GPU 硬件计时。父子 inclusive 时长、scan/bind/build/comment 聚合互相重叠，不能相加；事件之间的延迟也不能加进同步耗时。
+
+无名岛 CPU 计时 V1 实际路线为 22.209260 秒，2747 条记录无丢弃、未结束 span 或 recorder 错误。门口两次 caster 安装合计 6.654804 秒、receiver 安装 4.505299 秒；路线内 caster_prepare 78 次合计 2.625597 秒。房屋自身状态切换很短，等待旧任务清空约 0.069/0.137 秒，较长停顿主要落在重新安装阶段。这里区分路线内和整个案例，不把初始化计入路线合计。
+
+CPU 计时 V2 增加 builder 聚合和 `caster_verify`，wrapper 77.812 秒、实际路线 23.778219 秒、退出 0、引擎错误/警告空。caster 进/出屋安装 3.594339/3.551269 秒，其中实际 `build_candidate` 调用合计 0.979607/0.984952 秒；receiver 安装 2.512398/2.365122 秒，builder 仅 0.096942/0.085937 秒。builder 首次至末次的跨度含调用间隙，不能当 builder 总和，也不能把剩余时间全部称为 Shader 编译。首版独立适配器错误要求 caster `calls == bound`，失败包保留；修订版按已有控制流核对：Ambient fixed-Y=false 在 builder 调用后才跳过，所以 199/205 次构建与 165 个绑定并不矛盾。原候选与原始记录未为该失败修改。
+
+CPU 计时 V3 继续单独测量扫描、绑定及注释遮罩，wrapper 97.031 秒、路线 39.472655 秒、退出 0、错误/警告空。该次多个阶段同时变慢，系统负载和调度未隔离，不能把跨次差值确定归因新增计时。进/出屋注释处理占 caster 安装的 47.01%/47.69%，占 receiver 安装的 70.46%/77.69%；原实现对每条注释逐字符追加空格并反复重建整段源码，是已测得的主线程热点之一。扫描包含构建、构建又包含部分注释处理，只可从 scan 减去明确的 in-scan comments，余量仍不能称为编译时间。
+
+CPU 文本 V4 把注释遮罩改为同一正则匹配、按 LF 保留空段、原生重复空格及一次分段拼接。Unicode 字符位置、LF、CR 处理和旧正则对引号/未闭合注释的行为保持；它不是新解析器，也不缓存修改中的材质状态。另一项优化在一次同步 `verify_bound_state` 内按 Shader 实例 ID 复用 SHA，函数返回即释放；下一次检查重新读取当前代码。原材质身份短路、原/新 Shader 哈希、next_pass、render_priority 和四个自有相机 uniform 检查及错误顺序保留。
+
+注释等价测试覆盖 203 个实际/合成输入，最终引擎 stdout 为 1147 项通过；JSON 为 1146，因为 JSON 对象在额外的输出文件打开检查之前构造。首稿测试缺少显式 return 的解析失败及修订记录保留。扫描 fixture 首稿在 SceneTree 初始化阶段取节点路径产生错误，修订为 deferred 后 1.859 秒、59 项通过、错误/警告空；不能只用原进程退出 0 覆盖旧错误。SHA memo 独立测试 0.860 秒、61 项通过、退出 0、错误/警告空，验证逐调用重读、共享/同码不同资源、所有权与参数失败及错误顺序。
+
+CPU 文本 V4 的无名岛实际结果显示局部工作减少：`caster_verify` 中位从计时 V2 的 35.992 ms 降至 4.284 ms，进/出屋注释处理为 0.343903/0.371174 秒，receiver 安装为 1.426694/1.419483 秒。但 caster 安装仍为 4.470466/4.617655 秒，整段路线 33.597777 秒，高于 V1/V2 约 22–24 秒。保留这个真实结果，不把局部改善写成整段加速或流畅性通过；这些仍是顺序运行、未隔离系统负载的带诊断观测。
+
+无名 CPU 文本 V4 实测独审包为 `house-cpu-text-wuming-audit-v4-20261128`，manifest `4e50c31aa4db989c0e619189825ff53a6b6d3a24058a6f04f14b18088dc85625`。165 个 caster 的完整报告逐项核对 source/bound/template 哈希、fragment/inverse 标记及替换数一致。receiver 原始记录没有完整逐材质 inventory，不能把 caster 的检查扩展成 receiver 跨次运行逐 Shader 哈希核对。
+
+游仙村 CPU 文本 V4 路线 25.215411 秒，较旧 GPU 工作组 V4 的 15.790978 秒更慢；最大 post-draw 间隔 3.797089 秒，旧值 2.722632 秒。caster 进/出安装 2.519461/2.953898 秒、receiver 0.636667/0.610126 秒，verify 中位 5.511 ms。575 physics tick 保持，足点相对旧 GPU V4 最大三维差 0.14219045 mm，不能称 exact。实际 caster 各代绑定数 208→205→208；首审核误写必须各代同数，失败保留，修订按各代真实记录核对。最终 208 caster 报告标签及哈希一致，42 完整 ACK、208 caster+2 receiver 恢复和 closed 通过。修订独审为 `house-cpu-text-youxian-audit-v4-corrected-20261128`；不能用通过代替流畅性结论。
+
+CPU 分析 V5 在单次同步 caster install 内复用纯文本结果：注释/可达顶点风险以完整输入 String 为键，builder 以 family、实际 `_template_cache` 文本及源码为键。模板第一次读取仍由原函数完成；模板槽改变或移除按新输入计算，未知 family 和失败结果不缓存，成功 Dictionary 在存入与命中返回时分别深拷贝。install 返回前清空，不跨 install、帧或资源生命周期复用；原遍历、参数读取、Shader 创建、所有权验证与恢复保持。244 项真实引擎测试及 110 项独立源码/证据检查通过；nested 失败用例只证明外层 memo 不被清空，不证明嵌套计时归属。V5 的 build/comment 计时改为逻辑 wrapper（含命中、查找/复制和 miss），不得继续称为纯 super 执行时间。
+
+CPU 分析 V5 随后实际跑完两图，wrapper 218.609 秒、退出 0、错误/警告空。下面均为路线内观测，不含整段加载时间；V4 指本节的 CPU 文本 V4。
+
+| 地图 | V4→V5 路线墙钟秒 | V5 caster 进/出安装秒 | V5 receiver 进/出安装秒 | V5 最大 post-draw 间隔秒 | V5 失效→新组可用秒 |
+|---|---:|---:|---:|---:|---:|
+| 无名岛 | 33.597777→28.320491 | 1.146753 / 1.364717 | 1.463586 / 1.463770 | 2.233761 | 4.284907 / 4.205785 |
+| 游仙村 | 25.215411→19.626735 | 1.100708 / 1.149747 | 0.604260 / 0.633151 | 2.066088 | 3.415195 / 4.335282 |
+
+两图各代 builder 实际 miss 降为 5/6 次，comments 为 27/22 次，risk 为 13/6 次；所有材质仍逐项遍历、读取参数并执行原绑定/校验。V5 verify 中位为 4.409/5.791 ms。两图相对各自 CPU 文本 V4 的足点、phase/state、599/575 tick 与模拟时间 exact。无名 42 完整 ACK（37 accepted、4 rejected、1 retired），恢复 165 caster+28 receiver；游仙 41 完整 ACK（36、4、1），恢复 208 caster+2 receiver；两图 closed。同步记录无丢弃、未结束 span 或 recorder 错误。
+
+无名 165 caster 完整标签逐项一致；游仙 134 项原始路径身份一致，74 项仅自动节点名数字后缀变化，按记录中的明确映射后 208 行一致，其余标签去 nodes 后的完整多重集一致。原始路径严格比较失败仍保留，不能称游仙 raw identity exact 或 GPU 实例归属已证明。此次路线低于各自 CPU 文本 V4，但仍高于旧 GPU 工作组 V4 的 22.972856/15.790978 秒；不同运行的系统负载未隔离，不能据此计算稳定提速率。门口仍有约 2 秒单次绘制间隔和约 3–4 秒失效至新组延迟，默认继续关闭；保留局部优化继续定位，未通过完整流畅性或画面验收。
+
+阶段证据按实际 V1、V2 修订、V3、CPU 文本 V4 两图与 CPU 分析 V5 双图分别保留；旧测试/审核失败不回写。原始 JSONL、ACK、运行日志留在本地 `workbench/reports/landscape-drift-20261127/`，独审与小测试拟集中归档 `cpu-timing-and-text-20261128/`；该归档动作和 Git 提交/推送须以实际执行结果为准，本文不预先记为已同步。Git 只取核心源码和小文档。本轮仍不证明原版 UE 完整等价、两图全地图画面、长期资源行为、GPU 逐片元 epoch 一致消费或美术验收。

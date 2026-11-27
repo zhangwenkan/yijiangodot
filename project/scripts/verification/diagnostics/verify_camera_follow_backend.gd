@@ -10,6 +10,7 @@ var capture_png: bool=false
 var camera_script: String=""
 var scene: Node3D
 var driver: FollowDriver
+var cpu_stage_timing: RefCounted
 var report: Dictionary={"scope":"Continuous full-effect camera diagnostics; no claim of original parity or visual acceptance.","cases":[],"failures":[],"capture_note":"Optional every-rendered-frame PNG readback affects wall timing; not a performance benchmark."}
 
 class FollowDriver extends Node:
@@ -34,6 +35,7 @@ class FollowDriver extends Node:
 	var last_render_state: Dictionary={}
 	var fixed_references: Array[Vector3]=[]
 	var row: Dictionary={}
+	var cpu_stage_timing: RefCounted
 
 	func v3(value: Vector3) -> Array: return [value.x,value.y,value.z]
 	func v2(value: Vector2) -> Array: return [value.x,value.y]
@@ -68,6 +70,14 @@ class FollowDriver extends Node:
 		RenderingServer.frame_post_draw.connect(_on_frame_post_draw)
 
 	func _physics_process(delta: float) -> void:
+		if cpu_stage_timing == null:
+			_cpu_body__physics_process(delta)
+			return
+		var cpu_span: int = _cpu_begin("observer_physics", {})
+		_cpu_body__physics_process(delta)
+		_cpu_end(cpu_span)
+
+	func _cpu_body__physics_process(delta: float) -> void:
 		if finished: return
 		sim+=delta
 		var player: CharacterBody3D=scene.player
@@ -91,7 +101,9 @@ class FollowDriver extends Node:
 		if scene.house_driver.is_in_house!=inside:
 			inside=scene.house_driver.is_in_house
 			row.house_transitions.append(now.duplicate(true))
+		var cpu_observer_physics_json_write: int = _cpu_begin("observer_physics_json_write")
 		physics_file.store_line(JSON.stringify(now))
+		_cpu_end(cpu_observer_physics_json_write)
 		var motion: Vector2=Vector2.ZERO
 		if sim>=hold_until:
 			if waypoint>=definition.path.size():
@@ -127,12 +139,30 @@ class FollowDriver extends Node:
 		tick+=1
 
 	func _process(delta: float) -> void:
+		if cpu_stage_timing == null:
+			_cpu_body__process(delta)
+			return
+		var cpu_span: int = _cpu_begin("observer_process", {})
+		_cpu_body__process(delta)
+		_cpu_end(cpu_span)
+
+	func _cpu_body__process(delta: float) -> void:
 		if finished: return
 		last_render_state=state(delta)
+		var cpu_observer_process_json_write: int = _cpu_begin("observer_process_json_write")
 		frame_file.store_line(JSON.stringify(last_render_state))
+		_cpu_end(cpu_observer_process_json_write)
 		render_frame+=1
 
 	func _on_frame_post_draw() -> void:
+		if cpu_stage_timing == null:
+			_cpu_body__on_frame_post_draw()
+			return
+		var cpu_span: int = _cpu_begin("observer_driver_post", {})
+		_cpu_body__on_frame_post_draw()
+		_cpu_end(cpu_span)
+
+	func _cpu_body__on_frame_post_draw() -> void:
 		if finished or last_render_state.is_empty(): return
 		var stamp_usec: int=Time.get_ticks_usec()
 		var draw: Dictionary={"render_frame":last_render_state.render_frame,"physics_tick":last_render_state.physics_tick,"wall_seconds":float(stamp_usec-started_usec)/1000000.0,"wall_interval_seconds":0.0 if last_draw_usec==0 else float(stamp_usec-last_draw_usec)/1000000.0,"simulation_seconds":last_render_state.simulation_seconds,"phase":last_render_state.phase,"file":""}
@@ -145,7 +175,9 @@ class FollowDriver extends Node:
 			draw.readback_save_seconds=float(Time.get_ticks_usec()-stamp_usec)/1000000.0
 			row.captured_frames+=1
 			if result!=OK: row.capture_failures+=1
+		var cpu_observer_driver_post_json_write: int = _cpu_begin("observer_driver_post_json_write")
 		draw_file.store_line(JSON.stringify(draw))
+		_cpu_end(cpu_observer_driver_post_json_write)
 
 	func finish() -> void:
 		scene.player.set_review_motion(Vector2.ZERO)
@@ -153,6 +185,16 @@ class FollowDriver extends Node:
 		row.render_samples=render_frame
 		physics_file.flush(); frame_file.flush(); draw_file.flush()
 		physics_file=null; frame_file=null; draw_file=null
+
+	func _cpu_begin(stage: String, extra: Dictionary = {}) -> int:
+		if cpu_stage_timing == null: return -1
+		var context := {"map":str(definition.get("map","")),"phase":phase,"route_active":not finished,
+			"inside":scene.house_driver.is_in_house if is_instance_valid(scene) and is_instance_valid(scene.house_driver) else false}
+		context.merge(extra,true)
+		return cpu_stage_timing.begin_span(stage,context)
+
+	func _cpu_end(span: int) -> void:
+		if cpu_stage_timing != null: cpu_stage_timing.end_span(span)
 
 func _initialize() -> void:
 	for arg: String in OS.get_cmdline_user_args():
@@ -290,6 +332,14 @@ func _start_backend_observer() -> bool:
 	return report.failures.is_empty()
 
 func _observe_backend_draw() -> void:
+	if cpu_stage_timing == null:
+		_cpu_body__observe_backend_draw()
+		return
+	var cpu_span: int = _cpu_begin("observer_backend_post", {})
+	_cpu_body__observe_backend_draw()
+	_cpu_end(cpu_span)
+
+func _cpu_body__observe_backend_draw() -> void:
 	var actual_driver := RenderingServer.get_current_rendering_driver_name()
 	var actual_method := RenderingServer.get_current_rendering_method()
 	if actual_driver!=_backend_expected or actual_method!="forward_plus": _backend_fail("Runtime driver/method changed or fell back")
@@ -319,7 +369,9 @@ func _observe_backend_draw() -> void:
 		if not _backend_case_phases.has(row.case): _backend_case_phases[row.case] = {}
 		var phases: Dictionary = _backend_case_phases[row.case]
 		phases[row.phase] = int(phases.get(row.phase,0))+1
+	var cpu_observer_backend_post_json_write: int = _cpu_begin("observer_backend_post_json_write")
 	_backend_file.store_line(JSON.stringify(row))
+	_cpu_end(cpu_observer_backend_post_json_write)
 	_backend_draws += 1
 
 func _record_backend_summary() -> void:
@@ -342,3 +394,18 @@ func _record_backend_summary() -> void:
 				for phase: String in ["move_%d"%i,"hold_%d"%i]:
 					if int(phases.get(phase,0))==0: _backend_fail(str(item.name)+": no actual draw for "+phase)
 		report.status = "observed" if report.failures.is_empty() else "failed"
+
+func _cpu_begin(stage: String, extra: Dictionary = {}) -> int:
+	if cpu_stage_timing == null: return -1
+	var context: Dictionary = {}
+	if is_instance_valid(scene):
+		context.map=scene.slug
+		if is_instance_valid(scene.house_driver): context.inside=scene.house_driver.is_in_house
+	if is_instance_valid(driver):
+		context.phase=driver.phase
+		context.route_active=not driver.finished
+	context.merge(extra,true)
+	return cpu_stage_timing.begin_span(stage,context)
+
+func _cpu_end(span: int) -> void:
+	if cpu_stage_timing != null: cpu_stage_timing.end_span(span)

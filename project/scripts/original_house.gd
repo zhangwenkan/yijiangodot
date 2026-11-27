@@ -17,6 +17,7 @@ var _bodies: Dictionary = {}
 var _boxes: Array[Dictionary] = []
 var _overlaps: Dictionary = {}
 var _active := false
+var cpu_stage_timing: RefCounted
 
 func setup(slug: String, world: Node3D, collision_world: Node3D, player: Node3D, camera: Camera3D, environment: Node) -> Dictionary:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
@@ -156,18 +157,34 @@ func _physics_process(_delta: float) -> void:
 				break
 
 func set_inside(inside: bool) -> void:
+	if cpu_stage_timing == null:
+		_cpu_body_set_inside(inside)
+		return
+	var cpu_span: int = _cpu_begin("house_total", {"requested_inside":inside})
+	_cpu_body_set_inside(inside)
+	_cpu_end(cpu_span)
+
+func _cpu_body_set_inside(inside: bool) -> void:
 	if not _active or inside == is_in_house:
 		return
 	is_in_house = inside
+	var cpu_house_outside_group: int = _cpu_begin("house_outside_group")
 	_set_group("outside_actors", not inside)
+	_cpu_end(cpu_house_outside_group)
+	var cpu_house_inside_group: int = _cpu_begin("house_inside_group")
 	_set_group("inside_actors", inside)
+	_cpu_end(cpu_house_inside_group)
 	if is_instance_valid(_player):
 		_player.set_source_house_scale(float(_config.interior.actor_scale) if inside else 1.0)
 	if is_instance_valid(_camera):
 		_camera.set_source_house_state(inside, _config.interior)
 	if is_instance_valid(_environment) and _environment.has_method("set_source_house_lighting"):
+		var cpu_house_environment: int = _cpu_begin("house_environment")
 		_environment.set_source_house_lighting(inside, _config.interior)
+		_cpu_end(cpu_house_environment)
+	var cpu_house_emit: int = _cpu_begin("house_emit")
 	house_state_changed.emit(inside)
+	_cpu_end(cpu_house_emit)
 	print("ORIGINAL_HOUSE_STATE ", report.get("map", ""), " inside=", inside)
 
 func reset_outdoors() -> void:
@@ -184,3 +201,12 @@ func shutdown() -> void:
 
 func _exit_tree() -> void:
 	shutdown()
+
+func _cpu_begin(stage: String, extra: Dictionary = {}) -> int:
+	if cpu_stage_timing == null: return -1
+	var context := {"map":str(report.get("map","")),"inside":is_in_house}
+	context.merge(extra,true)
+	return cpu_stage_timing.begin_span(stage,context)
+
+func _cpu_end(span: int) -> void:
+	if cpu_stage_timing != null: cpu_stage_timing.end_span(span)

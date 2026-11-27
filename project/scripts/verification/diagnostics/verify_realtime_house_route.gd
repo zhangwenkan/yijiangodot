@@ -7,9 +7,12 @@ var tlv_file: FileAccess
 var tlv_row: Dictionary = {}
 var tlv_last_submission: Dictionary = {}
 var tlv_start_usec := 0
+var tlv_stage_timing_enabled := false
+var tlv_timing_path := ""
 
 func _initialize() -> void:
 	for arg in OS.get_cmdline_user_args():
+		if arg=="--tlv-stage-timing": tlv_stage_timing_enabled=true
 		if arg.begins_with("--tlv-route-mode="): tlv_mode=arg.trim_prefix("--tlv-route-mode=")
 	super._initialize()
 
@@ -18,7 +21,8 @@ func _backend_sources() -> Dictionary:
 	for path in ["res://scripts/verification/diagnostics/verify_camera_follow_backend.gd",
 		"res://source_tlv_realtime/realtime_sun.gd","res://source_tlv_realtime/snapshot_receiver.gd",
 		"res://source_tlv_realtime/main_rd_bridge.gd","res://source_tlv_realtime/dual_probe.gd",
-		"res://source_tlv_realtime/dynamic_caster_binding.gd"]:
+		"res://source_tlv_realtime/dynamic_caster_binding.gd","res://source_tlv_realtime/cpu_stage_timing.gd",
+		"res://source_tlv_realtime/comment_mask.gd"]:
 		hashes[path]=FileAccess.get_sha256(path)
 	return hashes
 
@@ -26,6 +30,14 @@ func route_check(condition: bool, message: String) -> void:
 	if not condition: _backend_fail(message)
 
 func observe_tlv_pre() -> void:
+	if cpu_stage_timing == null:
+		_cpu_body_observe_tlv_pre()
+		return
+	var cpu_span: int = _cpu_begin("observer_tlv_pre", {})
+	_cpu_body_observe_tlv_pre()
+	_cpu_end(cpu_span)
+
+func _cpu_body_observe_tlv_pre() -> void:
 	var sample := {"frame":Engine.get_frames_drawn(),"wall_seconds":float(Time.get_ticks_usec()-tlv_start_usec)/1000000.0,
 		"inside":scene.house_driver.is_in_house,"camera":str(scene.camera.global_transform),
 		"time_scale":Engine.time_scale,"mode":tlv_mode,"active":false,"errors":[],"materials":0}
@@ -74,6 +86,14 @@ func observe_tlv_pre() -> void:
 	tlv_last_submission=sample
 
 func observe_tlv_post() -> void:
+	if cpu_stage_timing == null:
+		_cpu_body_observe_tlv_post()
+		return
+	var cpu_span: int = _cpu_begin("observer_tlv_post", {})
+	_cpu_body_observe_tlv_post()
+	_cpu_end(cpu_span)
+
+func _cpu_body_observe_tlv_post() -> void:
 	if tlv_last_submission.is_empty() or tlv_file==null: return
 	var row := tlv_last_submission.duplicate(true)
 	row.post_draw_frame=Engine.get_frames_drawn()
@@ -93,7 +113,9 @@ func observe_tlv_post() -> void:
 			if str(row.phase).begins_with("move_"): tlv_row.active_moving_draws+=1
 			if int(row.house_generation)>=2 and not bool(row.inside): tlv_row.active_after_exit_draws+=1
 	if int(row.frame)!=int(row.post_draw_frame): route_check(false,"Pre/post draw frame correlation mismatch.")
+	var cpu_observer_tlv_post_json_write: int = _cpu_begin("observer_tlv_post_json_write")
 	tlv_file.store_line(JSON.stringify(row))
+	_cpu_end(cpu_observer_tlv_post_json_write)
 	tlv_row.draws+=1
 
 func stop_route_producer() -> void:
@@ -114,6 +136,7 @@ func stop_route_producer() -> void:
 		producer.queue_free()
 		producer=null
 	if tlv_file!=null: tlv_file.flush(); tlv_file=null
+	_finish_cpu_stage_timing()
 
 func run() -> void:
 	if output.is_empty() or tlv_mode not in ["baseline","receiver"]: quit(2); return
@@ -155,14 +178,24 @@ func run() -> void:
 		tlv_start_usec=Time.get_ticks_usec()
 		tlv_row={"name":definition.name,"mode":tlv_mode,"draws":0,"route_draws":0,"active_route_draws":0,"fallback_route_draws":0,"house_state_draws":{},"active_house_state_draws":{},"active_moving_draws":0,"active_after_exit_draws":0,"initial_inside":scene.house_driver.is_in_house}
 		tlv_last_submission={}
+		if tlv_stage_timing_enabled:
+			cpu_stage_timing=preload("res://source_tlv_realtime/cpu_stage_timing.gd").new()
+			cpu_stage_timing.configure({"case":str(definition.name),"map":str(definition.map),"mode":tlv_mode},32768)
+			tlv_timing_path=directory.path_join("cpu-stage-timing.json")
+			scene.house_driver.cpu_stage_timing=cpu_stage_timing
+			cpu_stage_timing.record_event("case_timing_started",{"phase":"warmup"})
 		if tlv_mode=="receiver":
 			producer=preload("res://source_tlv_realtime/realtime_sun.gd").new()
 			root.add_child(producer)
+			producer.cpu_stage_timing=cpu_stage_timing
+			var cpu_producer_install: int = _cpu_begin("producer_install")
 			var installed: Dictionary=producer.install(scene,definition.map,{"enable_receiver":true,"max_age_frames":8})
+			_cpu_end(cpu_producer_install)
 			route_check(installed.get("status")!="failed","Route producer installation failed: "+str(installed))
 			if installed.get("status")=="failed":
 				producer.queue_free(); producer=null
 				tlv_file.flush(); tlv_file=null
+				_finish_cpu_stage_timing("producer_install_failed")
 				break
 		RenderingServer.frame_pre_draw.connect(observe_tlv_pre)
 		RenderingServer.frame_post_draw.connect(observe_tlv_post)
@@ -180,10 +213,13 @@ func run() -> void:
 		driver.definition=definition
 		driver.directory=directory
 		driver.capture_png=false
+		driver.cpu_stage_timing=cpu_stage_timing
+		if cpu_stage_timing!=null: cpu_stage_timing.record_event("route_started",{"phase":"initial_hold"})
 		driver.begin()
 		root.add_child(driver)
 		while not driver.finished: await process_frame
 		driver.finish()
+		if cpu_stage_timing!=null: cpu_stage_timing.record_event("route_finished",{"phase":driver.phase})
 		var row: Dictionary=driver.row
 		route_check(row.status=="complete",definition.name+": route timeout")
 		route_check(row.below_support_ticks==0 and row.support_missing_ticks==0,definition.name+": support violation")
@@ -208,3 +244,16 @@ func run() -> void:
 	report.status="observed" if report.failures.is_empty() else "failed"
 	save_report()
 	quit(0 if report.failures.is_empty() else 1)
+
+func _finish_cpu_stage_timing(finish_reason: String = "route_stop_complete") -> void:
+	if cpu_stage_timing == null: return
+	var recorder: RefCounted = cpu_stage_timing
+	cpu_stage_timing=null
+	if is_instance_valid(scene) and is_instance_valid(scene.house_driver): scene.house_driver.cpu_stage_timing=null
+	if is_instance_valid(driver): driver.cpu_stage_timing=null
+	if is_instance_valid(producer): producer.cpu_stage_timing=null
+	recorder.record_event("case_timing_finished",{"phase":"case_end","finish_reason":finish_reason})
+	var result: Dictionary=recorder.dump_once(tlv_timing_path,{"source_hashes":_backend_source_hashes})
+	tlv_row.cpu_stage_timing=result
+	route_check(bool(result.get("written",false)),"CPU stage timing evidence write failed: "+str(result))
+	route_check(bool(result.get("valid",false)),"CPU stage timing evidence is incomplete: "+str(result))

@@ -105,3 +105,14 @@ V4仅两个计数Shader改为workgroup归约，保留每体素有限检查、计
 V4两图连续穿门wrapper74.329/79.796秒exit0 clean，各17独立正反fixture过；599/575ticks、66active10fallback/92active7fallback，43/54完整ACK共97，恢复165+28/208+2及closed。无名路线wall22.972856秒(旧51.233074、baseline14.496570)，游仙15.790978(旧36.128986、baseline14.692523)；单次观测分别降55.1601%/56.2928%，仍为baseline1.58471/1.074763倍。max post-draw3.844976/2.722632秒，最长fallback样本跨度6.938066/3.327604秒，包含阻塞/稀疏采样而非连续光学证明。无名三次足点exact，游仙V4与baseline exact、与旧V3最大0.14219045mm残差照报。保留V4但门口停顿仍明显，默认继续关闭，不称生产benchmark、低延迟或流畅性通过。dispatch失败分支、完整局部灯、UE阴影/全图画面/GPU逐片元epoch及正常性能仍未完成。
 
 完整CPU归档包括realtime-sidecar-cpu-v1、realtime-pair-cpu-v2、realtime-sidecar-youxian-cpu-v2、realtime-receiver-independent-cpu-v3、realtime-house-route-independent-cpu-v1、realtime-house-baseline-independent-cpu-v1，以及realtime-workgroup-independent-static-v4、realtime-pair-independent-cpu-v4、realtime-house-route-independent-cpu-v4、realtime-house-youxian-independent-cpu-v4。Git只取14实时源码+1穿门诊断+本AGENTS及进度文档共17小文件；封存时最近远端只读仍18b0c3b、push尚未发生。详见 docs/REALTIME_TLV_PROGRESS_20261127.md；不称完整复原或美术验收。
+
+
+2026-11-28 CPU定位与优化续记：“CPU计时V1/V2/V3、CPU文本V4、CPU分析V5”与旧“GPU工作组归约V4”分开命名。显式 `--tlv-stage-timing` 才启用有界内存计时，结束统一导出；默认入口/worlds未接实时生产器，receiver缺省false，默认试玩继续关闭。计时为同步函数墙钟而非CPU核/GPU硬件时间；父子inclusive、scan/bind/build/comment重叠，house事件延迟也不得相加。
+
+V1/V2实跑定位门口主要耗在caster/receiver重装与重复verify，builder只占安装的一部分，余量不称Shader编译。V3 comments占进/出caster安装47.01%/47.69%、receiver70.46%/77.69%；该次多个阶段同时变慢，系统负载未隔离，不确定归因埋点。V2首审calls==bound条件错误、游仙V4首审各代绑定数必须相同错误均保留；原控制流build后跳过fixed-Y=false，游仙实际208→205→208，修订按每代真实数核对。
+
+CPU文本V4保持同一regex/Unicode位置/LF与旧字符串行为，用repeat/join代逐字符拼接；SHA仅单次verify按Shader实例ID复用，下次重读，owner/原新代码/pass/priority/四uniform及错误顺序不变。203fixture引擎stdout1147项通过，JSON1146因结果先于文件打开检查构造；缺return解析失败保留。scan旧初始化取path错误保留，deferred修订59项clean；memo61项clean。CPU分析V5仅一次同步install内按完整String缓存注释/风险、按family+实际模板文本+源码缓存成功构建；首读/变更/移除模板槽保持原语义，unknown/error不存、Dictionary存入/命中均deep-copy，返回前清空，不跨install。244引擎测试及110独审通过；nested只证memo owner，不支持嵌套计时。build/comment现为logical wrapper，不是纯super执行。未改数值Shader/公式/纹理写入，未因此重跑新voxel，不冒称旧报告是本轮实测。
+
+V4无名verify中位35.992→4.284ms但路线33.597777秒高于计时V1/V2，游仙25.215411秒也高于旧GPU V4，局部改善不称整体加速。V5双图218.609秒exit0clean；路线无名28.320491/游仙19.626735秒、caster进出1.146753/1.364717与1.100708/1.149747秒，maxpost2.233761/2.066088秒，失效到fresh4.284907/4.205785与3.415195/4.335282秒。599/575tick及相对各自CPU V4足点/phase/state/sim exact，42/41完整ACK、165+28/208+2恢复closed。每代实际build miss5/6，保留逐材质扫描和owner检查。无名165caster完整标签exact；游仙134原路径相同、74自动名后缀按明确映射后完整208行一致，原raw路径失败保留，不声称raw identity/GPU归属exact；receiver无完整inventory，不扩成逐Shader跨run核对。
+
+V5路线仍高于旧GPU V4的22.972856/15.790978秒，系统负载未隔离，不报稳定提速率；门口仍约2秒绘制间隔及3–4秒新组延迟，默认关闭。完整复原、美术和流畅性验收未完成。实际V1/V2修订/V3/V4两图/V5双图及旧失败独立保存，本地大分析/JSONL/ACK不进Git；Git提交与推送只按实际执行另记。详情见 `docs/REALTIME_TLV_PROGRESS_20261127.md`。
