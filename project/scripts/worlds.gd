@@ -121,6 +121,7 @@ func _load_world(map_name: String) -> void:
 	_apply_landscape_material()
 	foliage_instances = 0
 	_load_original_instances()
+	preload("res://scripts/original_actor_initial_state.gd").apply_visuals(world, slug)
 	if not is_instance_valid(camera):
 		camera = preload("res://scripts/original_camera.gd").new()
 		camera.name = "FixedSourceDirectionCamera"

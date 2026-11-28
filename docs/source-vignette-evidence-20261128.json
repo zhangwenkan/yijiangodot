@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "date": "2026-11-28",
+  "scope": "Small source provenance and historical validation summary; no executable, game asset, full disassembly or GPU capture payload.",
+  "maps": {
+    "wuming": {
+      "configuration": "project/assets/environment/original-environment-config.json",
+      "json_path": "/maps/wuming/postprocess/0/properties/Settings",
+      "override": true,
+      "value": 0.6499999761581421
+    },
+    "youxian": {
+      "configuration": "project/assets/environment/original-environment-config.json",
+      "json_path": "/maps/youxian/postprocess/0/properties/Settings",
+      "override": true,
+      "value": 0.6499999761581421
+    }
+  },
+  "native_volume_defaults": {
+    "status": "confirmed from installed native executable and reflection metadata",
+    "exe_sha256": "8c3928aea470b45aff2050ffe1034306122f2ed221a43875f20ef1e61b274df8",
+    "class": "/Script/JH.JHPostProcessVolume",
+    "registration": "0x141344ef0 points to construction thunk 0x141346bc0; thunk jumps to JH ctor 0x140f6d6c0",
+    "base_class": "Registration superclass thunk 0x141348130 jumps to Engine PostProcessVolume registration 0x143688da0",
+    "derived_constructor": "0x140f6d6c0 calls 0x1433017e0; subsequent stores replace vtables and write only new fields 0x7c0=-1 and 0x7c4=0; inherited flags/BlendWeight are untouched",
+    "base_constructor": {
+      "address": "0x1433017e0",
+      "bEnabled": {
+        "instruction": "0x14330184b OR dword ptr [rbx+0x7bc],1",
+        "value": true,
+        "mapping": "Reflected bEnabled setter 0x143687490 ORs the same bit at offset 0x7bc"
+      },
+      "BlendWeight": {
+        "instruction": "0x14330185c MOV dword ptr [rbx+0x7b8],0x3f800000",
+        "value": 1.0,
+        "mapping": "Reflected float property offset 0x7b8"
+      }
+    },
+    "descriptors": {
+      "BlendWeight": {
+        "address": "0x144d49af0",
+        "size": 40,
+        "raw_hex": "4063184401000000000000000000000005000000020010000a0000004500000001000000b8070000",
+        "name_address": "0x144186340"
+      },
+      "bEnabled": {
+        "address": "0x144d49b18",
+        "size": 56,
+        "raw_hex": "f818134401000000000000000000000005000000000010000c000000450000000100000001000000c0070000000000009074684301000000",
+        "name_address": "0x1441318f8"
+      }
+    },
+    "disassembly_files": {
+      "0x141344ef0": {
+        "file": "local-only/source/native-function-0x141344ef0.txt",
+        "sha256": "16761006895a8fad66541805da4ba0caf8b63e7b5d84b85c8af45071cc05b8c4"
+      },
+      "0x141346bc0": {
+        "file": "local-only/source/native-function-0x141346bc0.txt",
+        "sha256": "b2fdc6d8902477c1f0c13f1e7bd94092942565224249bec3aa908032cc17c7cb"
+      },
+      "0x140f6d6c0": {
+        "file": "local-only/source/native-function-0x140f6d6c0.txt",
+        "sha256": "07ba858f48625fb7b7109ea5c405052f00dc85a7b16e8f45469be8236635891b"
+      },
+      "0x1433017e0": {
+        "file": "local-only/source/native-function-0x1433017e0.txt",
+        "sha256": "2e162c9279a96bc705fdc0a0edf9fa75e68237fdbd1f95fea175f7b1832a49cd"
+      },
+      "0x143688da0": {
+        "file": "local-only/source/native-function-0x143688da0.txt",
+        "sha256": "22851f32987201c852e90cdd1c539717ecda82fb2ab4a611e6bbf71990280e28"
+      },
+      "0x141348130": {
+        "file": "local-only/source/native-function-0x141348130.txt",
+        "sha256": "e8f67dabcee8b5cfc409bba4336fe525ea0d3a9532edecc3d1fb856d5756d5af"
+      },
+      "0x143687490": {
+        "file": "local-only/source/native-function-0x143687490.txt",
+        "sha256": "d5b810a3f491fd20537b31658a554db7d240186ae9931ffbc3d3ecd18b85b574"
+      }
+    },
+    "scope": "Confirms inherited default fields omitted by both cooked map records, not a live CDO read or arbitrary subclass default rule."
+  },
+  "formula": {
+    "domain": "HDR after bloom and exposure, before Film/LUT",
+    "pixel_center_uv": "uv=(pixel+0.5)/render_size",
+    "aspect": "a=height/width",
+    "centered_position": "q=(2*uv-1)*(1,a)*sqrt(2)/sqrt(1+a*a)",
+    "attenuation": "v=q*intensity; mask=1/(1+dot(v,v))^2",
+    "application": "hdr*=mask only when intensity>0; Film function unchanged",
+    "compiled_source": {
+      "global_shader_index_sha256": "770c3e2e542d7808b208cb538eba39f37fea342d5fade8d2d19166387ba40197",
+      "ps_compressed_offset": 6222829,
+      "vs_compressed_offset": 6236658,
+      "ps_order": "intensity*position, dp2, add1, reciprocal squared, multiply HDR, then LUT",
+      "runtime_permutation_captured": false
+    },
+    "limits": [
+      "Centered single-view lens mapping assumed; original runtime lens constants not captured.",
+      "HDR attenuation is not a final display-brightness ratio."
+    ]
+  },
+  "cpu_formula_validation": {
+    "sizes": [
+      [
+        1280,
+        720
+      ],
+      [
+        960,
+        720
+      ],
+      [
+        720,
+        960
+      ],
+      [
+        1920,
+        1080
+      ]
+    ],
+    "pixel_samples": 4377600,
+    "float32_vs_float64_max_abs_difference": 2.2002822053224236e-07,
+    "zero_branch_input_byte_comparisons": 400012,
+    "zero_branch_all_exact": true,
+    "theoretical_16_9_positions": {
+      "center": 1.0,
+      "horizontal_edge_midpoint": 0.3709429232309747,
+      "vertical_edge_midpoint": 0.6908693318265918,
+      "corner": 0.29376989510845725,
+      "halfway_to_horizontal_edge": 0.7425549500210058,
+      "halfway_to_corner": 0.6816044717265383
+    },
+    "scope": "CPU formula/reference and default-zero branch validation, not GPU equivalence or a screenshot comparison"
+  },
+  "house_scope": {
+    "IntoHouse_bytes": 2642,
+    "OutoHouse_bytes": 2032,
+    "IntoHouse_modified_fields": [
+      "AutoExposureMethod",
+      "ColorGammaShadows",
+      "DepthOfFieldFstop",
+      "LensFlareIntensity",
+      "DepthOfFieldFocalDistance"
+    ],
+    "vignette_overridden": false,
+    "exit": "Restores full cached settings",
+    "limit": "Static selected-main-map bytecode path; not all quest states."
+  },
+  "validation_state": {
+    "policy_test_count": 46,
+    "policy_test_failed": 0,
+    "production_default_gpu": "Recorded separately by the main runtime validation; not asserted by this CPU document."
+  },
+  "history": {
+    "initial_policy": "46 checks passed; writing NaN to JSON raised a warning. Non-finite source values now use strings in report; rerun clean.",
+    "initial_parse": "check-only first lacked an explicit writable log path and reported user://logs write errors; rerun with explicit logs clean.",
+    "retained_local_history": "visual-water-light-audit-20261128/source-default-policy-v1/"
+  }
+}

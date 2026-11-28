@@ -15,6 +15,7 @@ func setup(slug: String, use_cache := true) -> Dictionary:
 			report = cached.get_meta("collision_report", {}).duplicate()
 			report["map"] = slug
 			report["cached"] = true
+			report["actor_initial_state"] = preload("res://scripts/original_actor_initial_state.gd").apply_collisions(cached, slug)
 			print("ORIGINAL_COLLISION_READY ", JSON.stringify(report))
 			return report
 		cached.free()
@@ -33,6 +34,7 @@ func setup(slug: String, use_cache := true) -> Dictionary:
 	MetadataRestore.restore(source, path)
 	report = build_collision_from_scene(source)
 	report["map"] = slug
+	report["actor_initial_state"] = preload("res://scripts/original_actor_initial_state.gd").apply_collisions(self, slug)
 	print("ORIGINAL_COLLISION_READY ", JSON.stringify(report))
 	source.free()
 	return report

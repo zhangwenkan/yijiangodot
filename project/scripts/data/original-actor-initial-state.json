@@ -1,0 +1,997 @@
+{
+  "schema": 1,
+  "scope": "Initial serialized Actor state for existing selected main-map mesh assets; geometry retained.",
+  "policy": "Apply initial bHidden and bActorEnableCollision once during map load. Preserve component visibility. Do not evaluate unresolved quest-state semantics or permanently lock future state changes.",
+  "limitations": [
+    "Native VisibleComponent and quest-state transitions are not implemented here; raw ordered SceneNPCSettings remain attached as evidence.",
+    "Coverage is selected maps existing static-mesh placement actors, not every NPC, particle, interaction proxy, or story sublevel.",
+    "One unrelated Harvest archetype is absent from decoded source; these 17 policies are explicit local actor flags, so their values do not depend on that missing template."
+  ],
+  "expected_bindings": {
+    "wuming": {
+      "actors": 17,
+      "visual_nodes": 20,
+      "collision_bodies": 18,
+      "new_visual_hides": 19
+    },
+    "youxian": {
+      "actors": 0,
+      "visual_nodes": 0,
+      "collision_bodies": 0,
+      "new_visual_hides": 0
+    }
+  },
+  "maps": {
+    "wuming": [
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 1,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.Actor_0",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 579,
+            "name": "LV_WuMinDao_P.PersistentLevel.Actor_0.Visible1",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28967,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28968,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.Actor_0.InstancedStaticMeshComponent_0",
+            "source_component": 225,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_225_InstancedStaticMeshComponent_0_0_0",
+              "P_225_InstancedStaticMeshComponent_0_1_0",
+              "P_225_InstancedStaticMeshComponent_0_2_0",
+              "P_225_InstancedStaticMeshComponent_0_3_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0682_ConvexElems_00",
+              "COL_wuming_0683_ConvexElems_00",
+              "COL_wuming_0684_ConvexElems_00",
+              "COL_wuming_0685_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 122,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.BP_YaoYi_2",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 615,
+            "name": "LV_WuMinDao_P.PersistentLevel.BP_YaoYi_2.Visible",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32035,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.BP_YaoYi_2.StaticMeshComponent0",
+            "source_component": 510,
+            "component_visibility": {
+              "bVisible": false
+            },
+            "visual_node_names": [
+              "P_510_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0687_SphylElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 478,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_Item_daizi13_18",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 616,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_Item_daizi13_18.Visible2",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28967,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28968,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_Item_daizi13_18.StaticMeshComponent0",
+            "source_component": 512,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_512_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0688_BoxElems_00",
+              "COL_wuming_0688_ConvexElems_01"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 479,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_Item_gongzhuo002_139",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 617,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_Item_gongzhuo002_139.Visible",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32100,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32102,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": false
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_Item_gongzhuo002_139.StaticMeshComponent0",
+            "source_component": 513,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_513_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0689_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 486,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_Item_lanzi13_11",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 618,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_Item_lanzi13_11.Visible2",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28967,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28968,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_Item_lanzi13_11.StaticMeshComponent0",
+            "source_component": 520,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_520_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0696_BoxElems_00",
+              "COL_wuming_0696_ConvexElems_01"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 487,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_Item_mutong002_8",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 619,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_Item_mutong002_8.Visible2",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28967,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28968,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_Item_mutong002_8.StaticMeshComponent0",
+            "source_component": 521,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_521_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0697_complex_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 488,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_Item_muxiang33_2",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 620,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_Item_muxiang33_2.Visible2",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28967,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28968,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_Item_muxiang33_2.StaticMeshComponent0",
+            "source_component": 522,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_522_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0698_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 497,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_Item_shineibihua002_142",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 621,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_Item_shineibihua002_142.Visible",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32100,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32102,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": false
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_Item_shineibihua002_142.StaticMeshComponent0",
+            "source_component": 531,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_531_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": []
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 501,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_NJ_HuoyaoMuxiangzi_001_5",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 622,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_NJ_HuoyaoMuxiangzi_001_5.Visible2",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28967,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 28968,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_NJ_HuoyaoMuxiangzi_001_5.StaticMeshComponent0",
+            "source_component": 535,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_535_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0710_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 504,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.SM_xgg_yjzptong10_150",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 623,
+            "name": "LV_WuMinDao_P.PersistentLevel.SM_xgg_yjzptong10_150.Visible",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32100,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32102,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": false
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.SM_xgg_yjzptong10_150.StaticMeshComponent0",
+            "source_component": 538,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_538_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0713_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_P.umap",
+        "source_actor_export": 508,
+        "source_actor": "LV_WuMinDao_P.PersistentLevel.wudang_shineiqiangbizhuzi001_145",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 624,
+            "name": "LV_WuMinDao_P.PersistentLevel.wudang_shineiqiangbizhuzi001_145.Visible",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32100,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                },
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::PreQuest",
+                      "Id": 32102,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": false
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_P.PersistentLevel.wudang_shineiqiangbizhuzi001_145.StaticMeshComponent0",
+            "source_component": 542,
+            "component_visibility": {},
+            "visual_node_names": [
+              "P_542_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_0717_BoxElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap",
+        "source_actor_export": 4112,
+        "source_actor": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao033_33",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 8164,
+            "name": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao033_33.Visible1",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::HasQuest",
+                      "Id": 32028,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao033_33.StaticMeshComponent0",
+            "source_component": 6169,
+            "component_visibility": {},
+            "visual_node_names": [
+              "S_6169_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": []
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap",
+        "source_actor_export": 4113,
+        "source_actor": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao038_37",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 8165,
+            "name": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao038_37.Visible1",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::HasQuest",
+                      "Id": 32028,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao038_37.StaticMeshComponent0",
+            "source_component": 6170,
+            "component_visibility": {},
+            "visual_node_names": [
+              "S_6170_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": []
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap",
+        "source_actor_export": 4121,
+        "source_actor": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao34",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 8166,
+            "name": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao34.Visible",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::HasQuest",
+                      "Id": 32028,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_S.PersistentLevel.SM_HD_Huacao34.StaticMeshComponent0",
+            "source_component": 6178,
+            "component_visibility": {},
+            "visual_node_names": [
+              "S_6178_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": []
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap",
+        "source_actor_export": 4729,
+        "source_actor": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen001_29",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 8169,
+            "name": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen001_29.Visible1",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::HasQuest",
+                      "Id": 32028,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen001_29.StaticMeshComponent0",
+            "source_component": 6787,
+            "component_visibility": {},
+            "visual_node_names": [
+              "S_6787_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_1392_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap",
+        "source_actor_export": 4731,
+        "source_actor": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen2",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 8170,
+            "name": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen2.Visible1",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::HasQuest",
+                      "Id": 32028,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen2.StaticMeshComponent0",
+            "source_component": 6789,
+            "component_visibility": {},
+            "visual_node_names": [
+              "S_6789_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_1394_ConvexElems_00"
+            ]
+          }
+        ]
+      },
+      {
+        "source_map": "Wandering_Sword/Content/JH/Maps/DongHaiXianZong/WuMinDao/LV_WuMinDao_S.umap",
+        "source_actor_export": 4736,
+        "source_actor": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen7",
+        "initial_hidden": true,
+        "initial_collision_enabled": false,
+        "source_visible_components": [
+          {
+            "export": 8171,
+            "name": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen7.Visible2",
+            "class": "/Script/JH.VisibleComponent",
+            "template": "/Script/JH.Default__VisibleComponent",
+            "properties": {
+              "SceneNPCSettings": [
+                {
+                  "RequirementSettings": [
+                    {
+                      "Type": "ERequirementType::HasQuest",
+                      "Id": 32028,
+                      "Num": 4.0
+                    }
+                  ],
+                  "NPCActions": [
+                    {
+                      "bVisible": true
+                    }
+                  ],
+                  "bTriggerOnce": false
+                }
+              ],
+              "CreationMethod": "EComponentCreationMethod::Instance"
+            }
+          }
+        ],
+        "components": [
+          {
+            "source_name": "LV_WuMinDao_S.PersistentLevel.SM_mjsz_huapen7.StaticMeshComponent0",
+            "source_component": 6794,
+            "component_visibility": {},
+            "visual_node_names": [
+              "S_6794_StaticMeshComponent0_0_0"
+            ],
+            "collision_node_names": [
+              "COL_wuming_1399_ConvexElems_00"
+            ]
+          }
+        ]
+      }
+    ],
+    "youxian": []
+  }
+}

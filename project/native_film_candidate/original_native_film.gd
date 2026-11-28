@@ -11,6 +11,7 @@ var _lock := Mutex.new()
 var _inside := false
 var _last_inside := false
 var _exposure_domain_scale := 1.0
+var _vignette_intensity := 0.0
 var _outdoor := PackedByteArray()
 var _indoor := PackedByteArray()
 
@@ -31,6 +32,16 @@ func set_diagnostic_exposure_domain_scale(value: float) -> void:
 	_lock.lock()
 	_exposure_domain_scale = maxf(value, 0.0)
 	_lock.unlock()
+
+func set_source_vignette_intensity(value: float) -> void:
+	# Source policy is resolved by the renderer; unsupported records use 0.
+	_lock.lock()
+	_vignette_intensity = clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
+	_lock.unlock()
+
+func set_diagnostic_vignette_intensity(value: float) -> void:
+	# Retained for isolated A/B diagnostics; both setters share one value.
+	set_source_vignette_intensity(value)
 
 func _initialize_compute() -> void:
 	_rd = RenderingServer.get_rendering_device()
@@ -63,6 +74,7 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 	_lock.lock()
 	var inside := _inside
 	var scale_value := _exposure_domain_scale
+	var vignette_value := _vignette_intensity
 	_lock.unlock()
 	if inside != _last_inside:
 		_rd.buffer_update(_constants, 0, 1072, _indoor if inside else _outdoor)
@@ -72,7 +84,7 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 	push.encode_s32(0, size.x)
 	push.encode_s32(4, size.y)
 	push.encode_float(8, scale_value)
-	push.encode_float(12, 0.0)
+	push.encode_float(12, vignette_value)
 	for view in buffers.get_view_count():
 		var color := buffers.get_color_layer(view)
 		var color_uniform := RDUniform.new()

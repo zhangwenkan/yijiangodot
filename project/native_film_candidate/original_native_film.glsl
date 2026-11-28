@@ -3,7 +3,7 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(rgba16f, set = 0, binding = 0) uniform image2D hdr_color;
 layout(std430, set = 0, binding = 1) readonly buffer SourceConstants { vec4 cb[67]; } source;
-layout(push_constant, std430) uniform Parameters { ivec2 size; float exposure_domain_scale; float unused; } params;
+layout(push_constant, std430) uniform Parameters { ivec2 size; float exposure_domain_scale; float vignette_intensity; } params;
 // Source native grading + modern Film + neutral SDR output-domain polynomial.
 // Returns DISPLAY-LINEAR sRGB. Following Godot tonemap MUST be LINEAR, exposure1.
 // Native sRGB encode and LUT storage normalization are deliberately not duplicated.
@@ -412,10 +412,28 @@ vec3 native_film_sdr(vec3 color) {
     _v = exp2(r2.xyzx); r3.xyz = _v.xyz;
     return r3.xyz;
 }
+// UE4.26 PostProcessCommon.ush ComputeVignetteMask + VignetteSpace.
+// Source Tonemap applies this to exposed HDR after Bloom and before its Film LUT.
+// Centered single-view viewport: LensPrincipalPointOffsetScale=(0,0,1,1).
+// No claim is made for off-center/stereo/cropped-lens camera mappings.
+float source_vignette_mask(ivec2 pixel) {
+    vec2 viewport_pos = (vec2(pixel) + vec2(0.5)) / vec2(params.size) * 2.0 - 1.0;
+    float aspect = float(params.size.y) / float(params.size.x);
+    float circle_scale = sqrt(2.0) / sqrt(1.0 + aspect * aspect);
+    vec2 circle_pos = viewport_pos * vec2(1.0, aspect) * circle_scale;
+    circle_pos *= params.vignette_intensity;
+    float inv = 1.0 / (dot(circle_pos, circle_pos) + 1.0);
+    return inv * inv;
+}
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
     if (any(greaterThanEqual(pixel, params.size))) return;
     vec4 original = imageLoad(hdr_color, pixel);
-    vec3 result = native_film_sdr(max(original.rgb * params.exposure_domain_scale, vec3(0.0)));
+    vec3 exposed_hdr = original.rgb * params.exposure_domain_scale;
+    // The zero setting does not evaluate a mask or multiply the HDR a second time.
+    if (params.vignette_intensity > 0.0) {
+        exposed_hdr *= source_vignette_mask(pixel);
+    }
+    vec3 result = native_film_sdr(max(exposed_hdr, vec3(0.0)));
     imageStore(hdr_color, pixel, vec4(result, original.a));
 }

@@ -51,6 +51,8 @@ func setup(scene: Node, enable_distortion := false, enable_atmosphere := false) 
 	_viewport.screen_space_aa=Viewport.SCREEN_SPACE_AA_FXAA
 	_viewport.texture_mipmap_bias=effective_bias+0.25
 	film = load("res://native_film_candidate/original_native_film.gd").new()
+	var vignette_policy := resolve_source_vignette(environments[0].get_meta("ue_postprocess", []))
+	film.set_source_vignette_intensity(float(vignette_policy.intensity))
 	bloom = load("res://native_bloom_candidate/original_native_bloom.gd").new()
 	# Main-map IntoHouseTrigger6 does not override BloomIntensity. S5's .5 is unrelated.
 	bloom.set_source_intensities(5.0, 5.0)
@@ -65,7 +67,7 @@ func setup(scene: Node, enable_distortion := false, enable_atmosphere := false) 
 	var source_sun: Dictionary = _sun.get_meta("ue_properties", {})
 	_sun.light_energy = float(source_sun.get("Intensity", 30.0)) / PI
 	report = {"status":"installing", "map":scene.slug, "bloom_intensities":[5.0,5.0],
-		"bloom_quality_assumption":3, "distortion_requested":enable_distortion}
+		"bloom_quality_assumption":3, "distortion_requested":enable_distortion, "vignette":vignette_policy}
 	character = load("res://source_lighting_candidate/original_character_surface_adapter.gd").new()
 	report["character"] = character.apply(scene.player.sprite, _find_lightfunction_material(scene.world))
 	ambient = load("res://source_ambient_candidate/original_ambient_surface_adapter.gd").new()
@@ -126,6 +128,64 @@ func setup(scene: Node, enable_distortion := false, enable_atmosphere := false) 
 	report.status = "installed"
 	print("SOURCE_RENDERER_READY ", JSON.stringify({"map":scene.slug,"sh_materials":report.sh.get("bound",0),"fog_materials":report.height_fog.get("bound",0),"cone_materials":report.local_cones.get("bound",0),"distortion":enable_distortion}))
 	return report
+
+static func resolve_source_vignette(volumes: Variant) -> Dictionary:
+	# Cooked records omit inherited defaults. Only these two audited native
+	# classes inherit enabled=true and BlendWeight=1 from APostProcessVolume.
+	# Shipping EXE: base ctor 0x1433017e0; JH ctor 0x140f6d6c0 preserves both.
+	var result := {"status":"unsupported", "policy":"single_enabled_unbound_full_weight",
+		"intensity":0.0, "source_value":null, "reason":"", "defaulted_fields":[]}
+	if not volumes is Array:
+		result.reason = "PostProcess metadata is not an Array"
+		return result
+	if volumes.size() != 1:
+		result.reason = "Expected exactly one PostProcess volume; blending is not implemented"
+		return result
+	if not volumes[0] is Dictionary:
+		result.reason = "PostProcess volume is not a Dictionary"
+		return result
+	var volume: Dictionary = volumes[0]
+	result["volume"] = volume.get("name", "")
+	var native_class: Variant = volume.get("class", "")
+	if native_class not in ["/Script/JH.JHPostProcessVolume", "/Script/Engine.PostProcessVolume"]:
+		result.reason = "PostProcess class defaults have not been audited"
+		return result
+	var properties: Variant = volume.get("properties")
+	if not properties is Dictionary:
+		result.reason = "PostProcess properties are missing or malformed"
+		return result
+	var settings: Variant = properties.get("Settings")
+	if not settings is Dictionary:
+		result.reason = "PostProcess Settings are missing or malformed"
+		return result
+	var value: Variant = settings.get("VignetteIntensity")
+	result.source_value = str(value) if value is float and not is_finite(value) else value
+	var enabled: Variant = properties.get("bEnabled", true)
+	if not properties.has("bEnabled"): result.defaulted_fields.append("bEnabled")
+	if not enabled is bool or not enabled:
+		result.reason = "PostProcess volume is disabled or bEnabled is malformed"
+		return result
+	var unbound: Variant = properties.get("bUnbound")
+	if not unbound is bool or not unbound:
+		result.reason = "bUnbound must be explicitly true; bounded-volume blending is not implemented"
+		return result
+	var weight: Variant = properties.get("BlendWeight", 1.0)
+	if not properties.has("BlendWeight"): result.defaulted_fields.append("BlendWeight")
+	if not (weight is int or weight is float) or not is_finite(float(weight)) or float(weight) != 1.0:
+		result.reason = "Only a finite full BlendWeight of 1 is supported"
+		return result
+	var override: Variant = settings.get("bOverride_VignetteIntensity")
+	if not override is bool or not override:
+		result.reason = "VignetteIntensity override is missing, disabled or malformed"
+		return result
+	if not (value is int or value is float) or not is_finite(float(value)) or float(value) < 0.0 or float(value) > 1.0:
+		result.reason = "VignetteIntensity must be a finite number in [0,1]"
+		return result
+	result.status = "applied"
+	result.intensity = float(value)
+	result.reason = ""
+	result["defaults_evidence"] = "Shipping base ctor 0x1433017e0 and JH ctor 0x140f6d6c0"
+	return result
 
 func _on_house_state(inside: bool) -> void:
 	film.set_source_indoor(inside)
